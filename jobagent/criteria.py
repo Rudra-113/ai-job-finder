@@ -232,6 +232,16 @@ def stipend_problem(job: Job, minimum: float) -> str | None:
     return None
 
 
+def posting_age_problem(job: Job, max_days: int, now: datetime) -> str | None:
+    if not max_days or job.posted_at is None:
+        return None
+    posted = job.posted_at if job.posted_at.tzinfo else job.posted_at.replace(tzinfo=timezone.utc)
+    days = (now.date() - posted.astimezone(timezone.utc).date()).days
+    if days > max_days:
+        return "Posted too long ago"
+    return None
+
+
 def age_problem(job: Job, now: datetime) -> str | None:
     if job.deadline is not None:
         deadline = job.deadline if job.deadline.tzinfo else job.deadline.replace(tzinfo=timezone.utc)

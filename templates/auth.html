@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+<section class="hero" style="max-width:32rem;margin-inline:auto;text-align:center">
+  <p class="chip">AI Job Finder</p>
+  <h1>Find opportunities that fit you.</h1>
+  <p>Continue with Google. This app never asks for your Google password.</p>
+  {% if google_ready %}
+  <p><a class="button-link google" href="{{ url_for('google_start') }}">Continue with Google</a></p>
+  {% else %}
+  <p class="hint">Google sign-in is not configured on this computer yet. Add a Google web OAuth client as <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code>, with the redirect URI ending in <code>/auth/google/callback</code>.</p>
+  <form method="post" action="{{ url_for('local_sign_in') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="google" type="submit">Continue with the workspace on this computer</button>
+  </form>
+  <p class="hint">That opens the resume already saved on this computer. It is not a Google account.</p>
+  {% endif %}
+  <p class="hint">By continuing, you agree to our <a href="{{ url_for('terms') }}">Terms of Service</a> and <a href="{{ url_for('privacy') }}">Privacy Policy</a>.</p>
+</section>
+{% endblock %}

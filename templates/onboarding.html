@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Set up your search</h1>
+<p class="lede">Upload a resume. We only keep details that are written in the file, then ask a few questions that change which roles are worth showing.</p>
+
+<section class="card">
+  <h2>1. Upload your resume</h2>
+  <form class="stack" method="post" action="{{ url_for('onboarding_resume') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="cv">PDF or DOCX</label>
+    <input id="cv" name="cv" type="file" accept=".pdf,.docx,.txt,.md" required>
+    <button type="submit">Read resume</button>
+  </form>
+</section>
+
+{% if profile.cv_text %}
+<section class="card" style="margin-top:1rem">
+  <h2>AI profile</h2>
+  <p>Check this against the resume. Empty fields were not in the file.</p>
+  <form method="post" action="{{ url_for('onboarding_confirm') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="full_name">Name</label>
+    <input id="full_name" name="full_name" value="{{ profile.full_name }}" required>
+    <div class="grid two">
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" value="{{ profile.email }}" required>
+      </div>
+      <div>
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" value="{{ profile.phone }}">
+      </div>
+    </div>
+    <div class="grid two">
+      <div>
+        <label for="degree">Degree</label>
+        <input id="degree" name="degree" value="{{ profile.degree }}">
+      </div>
+      <div>
+        <label for="branch">Branch</label>
+        <input id="branch" name="branch" value="{{ profile.branch }}">
+      </div>
+    </div>
+    <div class="grid two">
+      <div>
+        <label for="college">College</label>
+        <input id="college" name="college" value="{{ profile.college }}">
+      </div>
+      <div>
+        <label for="graduation_year">Graduation year</label>
+        <input id="graduation_year" name="graduation_year" value="{{ profile.graduation_year }}">
+      </div>
+    </div>
+    <label for="city">Location</label>
+    <input id="city" name="city" value="{{ profile.city }}">
+    <label for="skills">Skills</label>
+    <textarea id="skills" name="skills">{{ profile.skills | join(', ') }}</textarea>
+    <label for="languages">Programming languages</label>
+    <input id="languages" name="languages" value="{{ profile.languages }}">
+    <label for="frameworks">Frameworks</label>
+    <input id="frameworks" name="frameworks" value="{{ profile.frameworks }}">
+    <label for="tools">Tools</label>
+    <input id="tools" name="tools" value="{{ profile.tools }}">
+    <label for="certifications">Certifications</label>
+    <textarea id="certifications" name="certifications">{{ profile.certifications }}</textarea>
+    <label for="projects">Projects</label>
+    <textarea id="projects" name="projects">{{ profile.projects }}</textarea>
+    <label for="experience_raw">Experience and internships</label>
+    <textarea id="experience_raw" name="experience_raw">{{ profile.experience_raw }}</textarea>
+    <label for="education_raw">Education</label>
+    <textarea id="education_raw" name="education_raw">{{ profile.education_raw }}</textarea>
+    <label for="achievements">Achievements</label>
+    <textarea id="achievements" name="achievements">{{ profile.achievements }}</textarea>
+    <label for="domains">Preferred domains</label>
+    <input id="domains" name="domains" value="{{ profile.domains }}">
+
+    <h2>2. A few questions</h2>
+    <p>What type of opportunities are you looking for?</p>
+    <label class="check"><input type="checkbox" name="employment_choice" value="intern" {% if settings.employment == "intern" %}checked{% endif %}> Internship</label>
+    <label class="check"><input type="checkbox" name="employment_choice" value="full-time" {% if settings.employment == "full-time" %}checked{% endif %}> Full-time</label>
+    <label class="check"><input type="checkbox" name="employment_choice" value="part-time" {% if settings.employment == "part-time" %}checked{% endif %}> Part-time</label>
+    <label class="check"><input type="checkbox" name="employment_choice" value="contract" {% if settings.employment == "contract" %}checked{% endif %}> Contract</label>
+    <label for="workplace">What work arrangement do you prefer?</label>
+    <select id="workplace" name="workplace">
+      {% for value, label in [("remote", "Remote"), ("hybrid", "Hybrid"), ("onsite", "On-site"), ("any", "Any")] %}
+      <option value="{{ value }}" {% if settings.workplace == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <label for="location">What locations are acceptable?</label>
+    <input id="location" name="location" value="{{ settings.location }}" placeholder="India, Lucknow, or leave blank">
+    <label for="minimum_stipend">Minimum expected stipend or monthly salary</label>
+    <input id="minimum_stipend" name="minimum_stipend" type="number" min="0" step="1" value="{{ '%g'|format(settings.minimum_stipend) }}">
+    <label for="roles">What roles are you interested in?</label>
+    <input id="roles" name="roles" value="{{ settings.roles | join(', ') }}">
+    <label for="sector">What industries or sectors are you interested in?</label>
+    <input id="sector" name="sector" value="{{ settings.sectors | join(', ') }}">
+    <p>What should we avoid?</p>
+    <label class="check"><input type="checkbox" name="avoid_unpaid" value="1" {% if settings.avoid_unpaid %}checked{% endif %}> Unpaid roles</label>
+    <label class="check"><input type="checkbox" name="avoid_relocation" value="1" {% if settings.avoid_relocation %}checked{% endif %}> Roles requiring relocation</label>
+    <label class="check"><input type="checkbox" name="avoid_sales" value="1" {% if settings.avoid_sales %}checked{% endif %}> Sales roles</label>
+    <label class="check"><input type="checkbox" name="avoid_video" value="1" {% if settings.avoid_video %}checked{% endif %}> Mandatory video introduction</label>
+    <label class="check"><input type="checkbox" name="avoid_above_level" value="1" {% if settings.avoid_above_level %}checked{% endif %}> Roles requiring experience above my level</label>
+    <label for="other_preferences">Other preferences</label>
+    <textarea id="other_preferences" name="other_preferences" placeholder="Find remote cybersecurity internships in India."></textarea>
+    <div class="button-row">
+      <button type="submit">Continue</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

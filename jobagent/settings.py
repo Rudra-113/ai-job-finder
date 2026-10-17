@@ -9,6 +9,17 @@ from jobagent.paths import atomic_write, file_lock, read_json
 from jobagent.textutil import split_csv
 
 WORKPLACES = ("any", "remote", "onsite", "hybrid")
+EMPLOYMENT = ("any", "intern", "full-time", "part-time", "contract")
+EXPERIENCE = ("any", "intern", "junior")
+DEFAULT_WEIGHTS = {
+    "skill": 30,
+    "role": 20,
+    "experience": 15,
+    "education": 10,
+    "location": 10,
+    "compensation": 5,
+    "preference": 10,
+}
 
 
 @dataclass
@@ -16,9 +27,11 @@ class Settings:
     sectors: list[str] = field(default_factory=list)
     roles: list[str] = field(default_factory=list)
     required_skills: list[str] = field(default_factory=list)
+    preferred_skills: list[str] = field(default_factory=list)
     location: str = ""
     workplace: str = "any"
     minimum_stipend: float = 0
+    minimum_salary: float = 0
     preferred_companies: list[str] = field(default_factory=list)
     excluded_companies: list[str] = field(default_factory=list)
     minimum_score: int = 70
@@ -28,16 +41,24 @@ class Settings:
     employment: str = "any"
     experience_level: str = "any"
     avoid_video: bool = False
+    avoid_unpaid: bool = True
+    avoid_relocation: bool = False
+    avoid_sales: bool = False
+    avoid_above_level: bool = False
     require_disclosed_pay: bool = False
+    max_posting_age: int = 0
+    match_weights: dict = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
 
     def to_dict(self) -> dict:
         return {
             "sectors": self.sectors,
             "roles": self.roles,
             "required_skills": self.required_skills,
+            "preferred_skills": self.preferred_skills,
             "location": self.location,
             "workplace": self.workplace,
             "minimum_stipend": self.minimum_stipend,
+            "minimum_salary": self.minimum_salary,
             "preferred_companies": self.preferred_companies,
             "excluded_companies": self.excluded_companies,
             "minimum_score": self.minimum_score,
@@ -47,7 +68,13 @@ class Settings:
             "employment": self.employment,
             "experience_level": self.experience_level,
             "avoid_video": self.avoid_video,
+            "avoid_unpaid": self.avoid_unpaid,
+            "avoid_relocation": self.avoid_relocation,
+            "avoid_sales": self.avoid_sales,
+            "avoid_above_level": self.avoid_above_level,
             "require_disclosed_pay": self.require_disclosed_pay,
+            "max_posting_age": self.max_posting_age,
+            "match_weights": self.match_weights,
         }
 
     @classmethod
@@ -67,20 +94,63 @@ class Settings:
             sectors=_list(data.get("sectors")),
             roles=_list(data.get("roles")),
             required_skills=_list(data.get("required_skills")),
+            preferred_skills=_list(data.get("preferred_skills")),
             location=str(data.get("location") or ""),
             workplace=workplace,
             minimum_stipend=max(0, stipend),
+            minimum_salary=max(0, _float(data.get("minimum_salary"))),
             preferred_companies=_list(data.get("preferred_companies")),
             excluded_companies=_list(data.get("excluded_companies")),
             minimum_score=min(100, max(0, score)),
             allow_hybrid=bool(data.get("allow_hybrid")),
             manual_review=bool(data.get("manual_review")),
             opportunity_count=_count(data.get("opportunity_count")),
-            employment=_choice(data.get("employment"), ("any", "intern", "full-time"), "any"),
-            experience_level=_choice(data.get("experience_level"), ("any", "intern", "junior"), "any"),
+            employment=_choice(data.get("employment"), EMPLOYMENT, "any"),
+            experience_level=_choice(data.get("experience_level"), EXPERIENCE, "any"),
             avoid_video=bool(data.get("avoid_video")),
+            avoid_unpaid=True if "avoid_unpaid" not in data else bool(data.get("avoid_unpaid")),
+            avoid_relocation=bool(data.get("avoid_relocation")),
+            avoid_sales=bool(data.get("avoid_sales")),
+            avoid_above_level=bool(data.get("avoid_above_level")),
             require_disclosed_pay=bool(data.get("require_disclosed_pay")),
+            max_posting_age=_age(data.get("max_posting_age")),
+            match_weights=normalize_weights(data.get("match_weights")),
         )
+
+
+def normalize_weights(value) -> dict:
+    base = dict(DEFAULT_WEIGHTS)
+    if isinstance(value, dict):
+        for key in base:
+            if key not in value or value[key] in (None, ""):
+                continue
+            try:
+                base[key] = min(100, max(0, int(value[key])))
+            except (TypeError, ValueError):
+                continue
+    total = sum(base.values())
+    if total == 100:
+        return base
+    if total <= 0:
+        return dict(DEFAULT_WEIGHTS)
+    scaled = {key: int(round(points * 100 / total)) for key, points in base.items()}
+    drift = 100 - sum(scaled.values())
+    scaled["skill"] = min(100, max(0, scaled["skill"] + drift))
+    return scaled
+
+
+def _float(value) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _age(value) -> int:
+    try:
+        return min(365, max(0, int(value or 0)))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _count(value) -> int:
@@ -136,26 +206,36 @@ def _number_error(stipend_raw: str, score_raw: str) -> tuple[float, int] | str:
     return stipend, score
 
 
+def _form_weights(form) -> dict:
+    if (form.get("weight_skill") or "") == "":
+        return dict(DEFAULT_WEIGHTS)
+    raw = {key: form.get(f"weight_{key}") for key in DEFAULT_WEIGHTS}
+    return normalize_weights(raw)
+
+
 def apply_main_fields(settings: Settings, form) -> str | None:
     sector = (form.get("sector") or "").strip()
     roles = (form.get("roles") or "").strip()
-    if not sector:
-        return "Enter a target sector."
-    if not roles:
-        return "Enter at least one target role."
-    parsed = _number_error(form.get("minimum_stipend") or "", form.get("minimum_score") or "")
-    if isinstance(parsed, str):
-        return parsed
-    stipend, score = parsed
-    settings.sectors = split_csv(sector)
-    settings.roles = split_csv(roles)
-    settings.minimum_stipend = stipend
-    settings.minimum_score = score
+    if sector:
+        settings.sectors = split_csv(sector)
+    if roles:
+        settings.roles = split_csv(roles)
+    if (form.get("minimum_stipend") or "").strip() or (form.get("minimum_score") or "").strip():
+        parsed = _number_error(form.get("minimum_stipend") or "0", form.get("minimum_score") or str(settings.minimum_score))
+        if isinstance(parsed, str):
+            return parsed
+        stipend, score = parsed
+        if (form.get("minimum_stipend") or "").strip():
+            settings.minimum_stipend = stipend
+        if (form.get("minimum_score") or "").strip():
+            settings.minimum_score = score
     if (form.get("opportunity_count") or "").strip():
         settings.opportunity_count = _count(form.get("opportunity_count"))
     from jobagent.intelligence import apply_natural_request
 
     apply_natural_request(settings, form.get("request") or "")
+    if not settings.sectors or not settings.roles:
+        return "Add a target sector and role in Settings, or describe them in the search."
     return None
 
 
@@ -186,9 +266,17 @@ def apply_settings_form(form) -> tuple[Settings, str | None]:
         allow_hybrid=(form.get("allow_hybrid") or "") in {"1", "on", "true", "yes"},
         manual_review=(form.get("manual_review") or "") in {"1", "on", "true", "yes"},
         opportunity_count=_count(form.get("opportunity_count")),
-        employment=_choice(form.get("employment"), ("any", "intern", "full-time"), "any"),
-        experience_level=_choice(form.get("experience_level"), ("any", "intern", "junior"), "any"),
+        employment=_choice(form.get("employment"), EMPLOYMENT, "any"),
+        experience_level=_choice(form.get("experience_level"), EXPERIENCE, "any"),
         avoid_video=(form.get("avoid_video") or "") in {"1", "on", "true", "yes"},
+        avoid_unpaid=(form.get("avoid_unpaid") or "") in {"1", "on", "true", "yes"},
+        avoid_relocation=(form.get("avoid_relocation") or "") in {"1", "on", "true", "yes"},
+        avoid_sales=(form.get("avoid_sales") or "") in {"1", "on", "true", "yes"},
+        avoid_above_level=(form.get("avoid_above_level") or "") in {"1", "on", "true", "yes"},
         require_disclosed_pay=(form.get("require_disclosed_pay") or "") in {"1", "on", "true", "yes"},
+        minimum_salary=_float(form.get("minimum_salary")),
+        preferred_skills=split_csv(form.get("preferred_skills") or ""),
+        max_posting_age=_age(form.get("max_posting_age")),
+        match_weights=_form_weights(form),
     )
     return settings, None

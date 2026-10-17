@@ -112,6 +112,19 @@ def test_one_unavailable_source_keeps_the_other_results(tmp_path):
     assert report["opportunities"][0]["company"] == "Northwind"
 
 
+def test_resume_extract_does_not_invent_fields():
+    from jobagent.resume_extract import extract_resume
+
+    extracted = extract_resume(
+        "Ada Lovelace\nada@example.com\n+1 415 555 0100\n\nSkills\nPython, SQL\n\nEducation\nBSc Statistics, State University, 2024\n\nProjects\nCity Lab dashboard\n"
+    )
+    assert extracted["full_name"] == "Ada Lovelace"
+    assert extracted["email"] == "ada@example.com"
+    assert "Python" in extracted["skills"]
+    assert extracted["degree"]
+    assert "COBOL" not in extracted["skills"]
+
+
 def test_why_matches_uses_only_profile_evidence(tmp_path):
     job = strong_job(description="Remote data internship using Python and SQL. COBOL is required. Stipend 3000 per month.")
     reasons = [item.casefold() for item in why_matches(job, strong_profile(tmp_path))]

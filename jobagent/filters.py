@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from jobagent.criteria import (
     age_problem,
     company_named,
+    posting_age_problem,
     required_skills_listed,
     sector_matches,
     stipend_problem,
@@ -45,9 +46,18 @@ def screen(
         return Decision(False, aged)
     if mentions_fee(f"{job.title}\n{job.description}"):
         return Decision(False, "Asks for payment or looks unsafe")
-    pay = stipend_problem(job, settings.minimum_stipend)
+    floor = settings.minimum_stipend
+    internish = "intern" in f"{job.title} {job.employment}".casefold()
+    if not internish and settings.minimum_salary > 0:
+        floor = settings.minimum_salary
+    pay = stipend_problem(job, floor)
+    if pay == "Unpaid" and not settings.avoid_unpaid:
+        pay = None
     if pay:
         return Decision(False, pay)
+    stale = posting_age_problem(job, settings.max_posting_age, moment)
+    if stale:
+        return Decision(False, stale)
     if company_named(job.company, settings.excluded_companies):
         return Decision(False, "Excluded company")
     if not sector_matches(job, settings.sectors):

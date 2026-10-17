@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block body %}
+<article class="opportunity">
+  <p class="match">{{ card.match_score }}% match</p>
+  <h1>{{ card.role }}</h1>
+  <p>{{ card.company }}</p>
+  <p class="meta">{{ card.work_mode }} · {{ card.location or "Location not stated" }} · {{ card.compensation }}</p>
+  <p class="meta">Posted {{ card.posted or "date not listed" }} · Availability {{ card.availability }}</p>
+  <p>Found on {{ card.sources | join(' · ') or card.source }}</p>
+  {% if card.employment %}<p>Job type: {{ card.employment }}</p>{% endif %}
+  {% if card.experience %}<p>Experience: {{ card.experience }}</p>{% endif %}
+  {% if card.deadline %}<p>Deadline: {{ card.deadline }}</p>{% endif %}
+  <h2>Why this matches</h2>
+  {% if card.why %}
+  <ul class="clean">{% for item in card.why %}<li>✓ {{ item }}</li>{% endfor %}</ul>
+  {% else %}
+  <p class="hint">No skill from your profile was found in the listing text.</p>
+  {% endif %}
+  <h2>Potential gaps</h2>
+  {% if card.gaps %}
+  <ul class="clean">{% for item in card.gaps %}<li>△ {{ item }}</li>{% endfor %}</ul>
+  {% else %}
+  <p class="hint">No extra requirement in the listing was clearly missing from your profile.</p>
+  {% endif %}
+  <h2>Required skills</h2>
+  {% if card.required_skills %}
+  <ul class="clean">{% for item in card.required_skills %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% else %}<p class="hint">Not stated.</p>{% endif %}
+  <h2>Preferred skills</h2>
+  {% if card.preferred_skills %}
+  <ul class="clean">{% for item in card.preferred_skills %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% else %}<p class="hint">Not stated.</p>{% endif %}
+  <h2>Responsibilities</h2>
+  {% if card.responsibilities %}
+  <ul class="clean">{% for item in card.responsibilities %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% else %}<p class="hint">Not stated.</p>{% endif %}
+  <h2>Description</h2>
+  <p>{{ card.description or "The listing did not include a description." }}</p>
+  <div class="button-row">
+    {% if card.official_verified and card.official_url %}
+    <a class="button-link" href="{{ card.official_url }}" target="_blank" rel="noopener noreferrer">Apply on official site</a>
+    {% elif card.url %}
+    <a class="button-link secondary" href="{{ card.url }}" target="_blank" rel="noopener noreferrer">View job</a>
+    <p class="hint">Official application link could not be verified.</p>
+    {% endif %}
+    <a class="button-link secondary" href="{{ url_for('dashboard') }}">Back to results</a>
+  </div>
+</article>
+{% endblock %}

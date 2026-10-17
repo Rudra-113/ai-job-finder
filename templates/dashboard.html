@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block body %}
+<section class="hero search-box">
+  <h1>What are you looking for?</h1>
+  <form method="post" action="{{ url_for('start_search') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="hint" for="request">Describe the roles, place, pay, and how many results you want.</label>
+    <textarea id="request" name="request" placeholder="Find me 20 remote cybersecurity internships in India with at least ₹10000 monthly stipend. Prefer SOC, network security and security research.">{{ query }}</textarea>
+    <label for="opportunity_count">Number of opportunities</label>
+    <input id="opportunity_count" name="opportunity_count" type="number" min="1" max="100" value="{{ settings.opportunity_count }}">
+    <p class="hint">This is how many final matches to show, after a wider search.</p>
+    <div class="button-row">
+      <button type="submit">Search</button>
+    </div>
+  </form>
+  <form id="stop-form" method="post" action="{{ url_for('stop') }}" {% if not running %}hidden{% endif %}>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="secondary" type="submit">Stop search</button>
+  </form>
+</section>
+
+<p id="status-line" role="status">{{ status_line }}</p>
+{% if query %}
+<div class="chips" aria-label="Your search">
+  <span class="chip">{{ query }}</span>
+</div>
+{% endif %}
+
+<section class="stats" aria-label="Search statistics">
+  <div class="stat"><b id="discovered">{{ discovered }}</b><span>Jobs discovered</span></div>
+  <div class="stat"><b id="analyzed">{{ analyzed }}</b><span>Unique jobs</span></div>
+  <div class="stat"><b id="active">{{ active_count }}</b><span>Active</span></div>
+  <div class="stat"><b id="strong">{{ strong_matches }}</b><span>Strong matches</span></div>
+  <div class="stat"><b id="final-count">{{ final_count }}</b><span>Top opportunities</span></div>
+</section>
+
+<section id="sources">
+  {% if source_report %}
+  <h2>Sources searched</h2>
+  <ul class="clean">
+    {% for row in source_report %}
+    <li>{{ row.name }}: {% if row.status == 'ok' %}{{ row.count }} listings{% elif row.status == 'unavailable' %}Unavailable{% else %}No public listings{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section id="loading" {% if not running %}hidden{% endif %}>
+  <p>Searching job sources...</p>
+  <div class="grid">
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+  </div>
+</section>
+
+<section id="opportunities">
+  {% if opportunities %}
+  <h2>{{ final_count }} best opportunities</h2>
+  <div class="grid">
+    {% for card in opportunities %}
+    <article class="opportunity">
+      <p class="match">{{ card.match_score }}% match</p>
+      <h3>{{ card.role }}</h3>
+      <p>{{ card.company }}</p>
+      <p class="meta">{{ card.work_mode }} · {{ card.location or "Location not stated" }}</p>
+      <p>{{ card.compensation }}</p>
+      <p class="meta">Posted {{ card.posted or "date not listed" }} · {{ card.availability }}</p>
+      <p class="meta">Found on {{ card.sources | join(' · ') }}</p>
+      {% if card.why %}<p class="why">Why it matches: {% for item in card.why %}✓ {{ item }} {% endfor %}</p>{% endif %}
+      {% if card.gaps %}<p class="why">Potential gaps: {% for item in card.gaps %}△ {{ item }} {% endfor %}</p>{% endif %}
+      <div class="button-row">
+        <a class="button-link secondary" href="{{ url_for('opportunity', opportunity_id=card.id) }}">View details</a>
+        {% if card.official_verified and card.official_url %}
+        <a class="button-link" href="{{ card.official_url }}" target="_blank" rel="noopener noreferrer">Apply on official site</a>
+        {% elif card.url %}
+        <a class="button-link" href="{{ card.url }}" target="_blank" rel="noopener noreferrer">View job</a>
+        <span class="hint">Official application link could not be verified.</span>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% if rejection_counts %}
+<section>
+  <h2>Why some listings were left out</h2>
+  <ul class="clean">
+    {% for reason, count in rejection_counts.items() %}
+    <li>{{ reason }}: {{ count }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section>
+  <h2>Previous searches</h2>
+  {% if history %}
+  <div class="grid">
+    {% for item in history %}
+    <article class="card">
+      <h3>{{ item.query }}</h3>
+      <p class="meta">{{ item.final_count }} opportunities · {{ item.created[:10] }}</p>
+      <form method="post" action="{{ url_for('open_history', search_id=item.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="secondary" type="submit">Open</button>
+      </form>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="hint">Searches you run will be listed here.</p>
+  {% endif %}
+</section>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

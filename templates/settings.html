@@ -1,57 +1,67 @@
 {% extends "base.html" %}
 {% block body %}
 <h1>Settings</h1>
-<p class="hint">A job outside these rules is skipped. Preferred companies also have their Greenhouse, Lever, and Ashby pages checked. Other companies can still match from the job boards.</p>
+<p class="lede">These rules decide which listings can become recommendations. The search still reads widely, then returns your chosen number of best matches.</p>
 <form class="stack" method="post" action="{{ url_for('save_settings_page') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <label for="sector">Target sector</label>
   <input id="sector" name="sector" value="{{ sector }}" required>
-  <p class="hint">Comma-separated. A job must match one full phrase, using words that appear in postings.</p>
   <label for="roles">Target roles</label>
   <input id="roles" name="roles" value="{{ roles }}" required>
-  <p class="hint">Comma-separated. The title should match one of these.</p>
   <label for="required_skills">Required skills</label>
   <input id="required_skills" name="required_skills" value="{{ required_skills }}">
-  <p class="hint">Every skill here must appear in the listing. Leave blank to use your CV for scoring only.</p>
+  <p class="hint">Every skill here must appear in the listing.</p>
+  <label for="preferred_skills">Preferred skills</label>
+  <input id="preferred_skills" name="preferred_skills" value="{{ preferred_skills }}">
   <label for="location">Location</label>
   <input id="location" name="location" value="{{ settings.location }}">
-  <p class="hint">Use the full place name. Remote listings must allow this place when they state a restriction.</p>
   <label class="check" for="allow_hybrid"><input id="allow_hybrid" name="allow_hybrid" type="checkbox" {% if settings.allow_hybrid %}checked{% endif %}> Allow hybrid</label>
-  <label for="opportunity_count">Number of opportunities</label>
-  <input id="opportunity_count" name="opportunity_count" type="number" min="1" max="100" step="1" value="{{ settings.opportunity_count }}">
-  <label for="employment">Internship or full-time</label>
+  <label for="workplace">Remote / hybrid / on-site</label>
+  <select id="workplace" name="workplace">
+    {% for value, label in [("any", "Any"), ("remote", "Remote"), ("hybrid", "Hybrid"), ("onsite", "On-site")] %}
+    <option value="{{ value }}" {% if settings.workplace == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label for="employment">Internship / full-time</label>
   <select id="employment" name="employment">
-    {% for value, label in [("any", "Any"), ("intern", "Internship"), ("full-time", "Full-time")] %}
+    {% for value, label in [("any", "Any"), ("intern", "Internship"), ("full-time", "Full-time"), ("part-time", "Part-time"), ("contract", "Contract")] %}
     <option value="{{ value }}" {% if settings.employment == value %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
+  <label for="minimum_stipend">Minimum stipend</label>
+  <input id="minimum_stipend" name="minimum_stipend" type="number" min="0" step="1" value="{{ '%g'|format(settings.minimum_stipend) }}">
+  <label for="minimum_salary">Minimum salary</label>
+  <input id="minimum_salary" name="minimum_salary" type="number" min="0" step="1" value="{{ '%g'|format(settings.minimum_salary) }}">
+  <p class="hint">Monthly amount. Internships use the stipend. Other roles use the salary when it is set. Unstated pay stays unless you require disclosed compensation.</p>
   <label for="experience_level">Experience level</label>
   <select id="experience_level" name="experience_level">
     {% for value, label in [("any", "Any"), ("intern", "Intern"), ("junior", "Junior")] %}
     <option value="{{ value }}" {% if settings.experience_level == value %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
-  <label class="check" for="avoid_video"><input id="avoid_video" name="avoid_video" type="checkbox" {% if settings.avoid_video %}checked{% endif %}> Skip mandatory video applications</label>
-  <label class="check" for="require_disclosed_pay"><input id="require_disclosed_pay" name="require_disclosed_pay" type="checkbox" {% if settings.require_disclosed_pay %}checked{% endif %}> Require disclosed compensation</label>
-  <label class="check" for="manual_review"><input id="manual_review" name="manual_review" type="checkbox" {% if settings.manual_review %}checked{% endif %}> Review before submit</label>
-  <p class="hint">Leave this off and Apply directly submits a complete form, then moves to the next selected job. Turn it on to hold each filled form until you click Submit.</p>
-  <p class="hint">Hybrid roles are skipped unless this is checked. On-site roles are skipped when Remote is selected. Missing pay is kept and marked unknown. Unpaid roles are skipped.</p>
-  <label for="workplace">Remote/onsite</label>
-  <select id="workplace" name="workplace">
-    {% for value, label in [("any", "Any"), ("remote", "Remote"), ("onsite", "Onsite"), ("hybrid", "Hybrid")] %}
-    <option value="{{ value }}" {% if settings.workplace == value %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
-  <label for="minimum_stipend">Minimum stipend</label>
-  <input id="minimum_stipend" name="minimum_stipend" type="number" min="0" step="1" value="{{ '%g'|format(settings.minimum_stipend) }}" required>
-  <p class="hint">Monthly amount. Hourly or weekly pay counts only when the listing says full-time. Unpaid roles are always skipped.</p>
   <label for="preferred_companies">Preferred companies</label>
   <input id="preferred_companies" name="preferred_companies" value="{{ preferred }}">
   <label for="excluded_companies">Excluded companies</label>
   <input id="excluded_companies" name="excluded_companies" value="{{ excluded }}">
-  <p class="hint">A company whose name contains one of these is never opened.</p>
+  <label for="max_posting_age">Posting age, in days</label>
+  <input id="max_posting_age" name="max_posting_age" type="number" min="0" max="365" value="{{ settings.max_posting_age }}">
+  <p class="hint">Use 0 to keep listings with no date. A missing date is not treated as old.</p>
   <label for="minimum_score">Minimum match score</label>
-  <input id="minimum_score" name="minimum_score" type="number" min="0" max="100" step="1" value="{{ settings.minimum_score }}" required>
+  <input id="minimum_score" name="minimum_score" type="number" min="0" max="100" value="{{ settings.minimum_score }}">
+  <label for="opportunity_count">Number of opportunities</label>
+  <input id="opportunity_count" name="opportunity_count" type="number" min="1" max="100" value="{{ settings.opportunity_count }}">
+  <label class="check"><input type="checkbox" name="avoid_unpaid" value="1" {% if settings.avoid_unpaid %}checked{% endif %}> Skip unpaid roles</label>
+  <label class="check"><input type="checkbox" name="avoid_video" value="1" {% if settings.avoid_video %}checked{% endif %}> Skip mandatory video applications</label>
+  <label class="check"><input type="checkbox" name="avoid_relocation" value="1" {% if settings.avoid_relocation %}checked{% endif %}> Skip relocation requirements</label>
+  <label class="check"><input type="checkbox" name="avoid_sales" value="1" {% if settings.avoid_sales %}checked{% endif %}> Skip sales roles</label>
+  <label class="check"><input type="checkbox" name="avoid_above_level" value="1" {% if settings.avoid_above_level %}checked{% endif %}> Skip roles above my experience level</label>
+  <label class="check"><input type="checkbox" name="require_disclosed_pay" value="1" {% if settings.require_disclosed_pay %}checked{% endif %}> Require disclosed compensation</label>
+  <h2>Match weights</h2>
+  <p class="hint">These should add up to 100. They are scaled if they do not.</p>
+  {% for key, label in [("skill", "Skill match"), ("role", "Role relevance"), ("experience", "Experience fit"), ("education", "Education fit"), ("location", "Location and work mode"), ("compensation", "Compensation"), ("preference", "Preferred companies")] %}
+  <label for="weight_{{ key }}">{{ label }}</label>
+  <input id="weight_{{ key }}" name="weight_{{ key }}" type="number" min="0" max="100" value="{{ weights[key] }}">
+  {% endfor %}
   <button type="submit">Save settings</button>
 </form>
 {% endblock %}

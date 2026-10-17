@@ -153,7 +153,10 @@ class GateHandler(BaseHTTPRequestHandler):
             for key, value in self.headers.items()
             if key.lower() not in _HOP
         }
+        original_host = self.headers.get("Host", "")
         headers["Host"] = f"{GATE_HOST}:{self.server.upstream_port}"
+        headers["X-Forwarded-Host"] = original_host
+        headers["X-Forwarded-Proto"] = "https" if "trycloudflare.com" in original_host else "http"
         headers["Connection"] = "close"
         try:
             upstream = http.client.HTTPConnection(GATE_HOST, self.server.upstream_port, timeout=120)

@@ -809,6 +809,7 @@ def search_all_sources(settings: Settings, queries: list[str] | None = None) -> 
                     company_count += len(found)
                     jobs.extend(found)
     report.append(_source_row("Company Careers", company_count, None if company_count else "empty"))
+    report.append({"name": "_discovered", "count": len(jobs), "status": "meta", "note": ""})
     unique = dedupe_jobs(jobs)
     unique.sort(key=lambda job: job.posted_at.timestamp() if job.posted_at else 0, reverse=True)
     return unique, warnings, report

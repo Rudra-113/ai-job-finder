@@ -40,6 +40,17 @@ class Profile:
     extra_facts: str = ""
     cv_path: str = ""
     cv_text: str = ""
+    college: str = ""
+    degree: str = ""
+    branch: str = ""
+    graduation_year: str = ""
+    certifications: str = ""
+    achievements: str = ""
+    languages: str = ""
+    frameworks: str = ""
+    tools: str = ""
+    domains: str = ""
+    onboarded: bool = False
 
     @property
     def first_name(self) -> str:
@@ -84,6 +95,17 @@ class Profile:
             "extra_facts": self.extra_facts,
             "cv_path": self.cv_path,
             "cv_text": self.cv_text,
+            "college": self.college,
+            "degree": self.degree,
+            "branch": self.branch,
+            "graduation_year": self.graduation_year,
+            "certifications": self.certifications,
+            "achievements": self.achievements,
+            "languages": self.languages,
+            "frameworks": self.frameworks,
+            "tools": self.tools,
+            "domains": self.domains,
+            "onboarded": self.onboarded,
         }
 
     @classmethod
@@ -109,6 +131,17 @@ class Profile:
             extra_facts=str(data.get("extra_facts") or ""),
             cv_path=str(data.get("cv_path") or ""),
             cv_text=str(data.get("cv_text") or ""),
+            college=str(data.get("college") or ""),
+            degree=str(data.get("degree") or ""),
+            branch=str(data.get("branch") or ""),
+            graduation_year=str(data.get("graduation_year") or ""),
+            certifications=str(data.get("certifications") or ""),
+            achievements=str(data.get("achievements") or ""),
+            languages=str(data.get("languages") or ""),
+            frameworks=str(data.get("frameworks") or ""),
+            tools=str(data.get("tools") or ""),
+            domains=str(data.get("domains") or ""),
+            onboarded=bool(data.get("onboarded")),
         )
 
 
@@ -235,5 +268,15 @@ def validate_profile_fields(form) -> tuple[dict, str | None, list[str]]:
         "experience_raw": experience.strip(),
         "projects": (form.get("projects") or "").strip(),
         "extra_facts": (form.get("extra_facts") or "").strip(),
+        "college": (form.get("college") or "").strip(),
+        "degree": (form.get("degree") or "").strip(),
+        "branch": (form.get("branch") or "").strip(),
+        "graduation_year": (form.get("graduation_year") or "").strip(),
+        "certifications": (form.get("certifications") or "").strip(),
+        "achievements": (form.get("achievements") or "").strip(),
+        "languages": (form.get("languages") or "").strip(),
+        "frameworks": (form.get("frameworks") or "").strip(),
+        "tools": (form.get("tools") or "").strip(),
+        "domains": (form.get("domains") or "").strip(),
     }
     return payload, None, edu_bad + exp_bad

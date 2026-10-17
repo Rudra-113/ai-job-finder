@@ -4,16 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf" content="{{ csrf }}">
-  <title>{{ title }} — Job Agent</title>
+  <title>{{ title }} — AI Job Finder</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header>
-    <a class="brand" href="{{ url_for('index') }}">Job Agent</a>
+    <a class="brand" href="{{ url_for('dashboard') if logged_in else url_for('landing') }}">AI Job Finder</a>
     <nav>
-      <a href="{{ url_for('index') }}" {% if active == "search" %}aria-current="page"{% endif %}>Search</a>
-      <a href="{{ url_for('settings_page') }}" {% if active == "settings" %}aria-current="page"{% endif %}>Settings</a>
+      {% if logged_in %}
+      <a href="{{ url_for('dashboard') }}" {% if active == "search" %}aria-current="page"{% endif %}>Search</a>
+      <a href="{{ url_for('dashboard') }}#opportunities">Opportunities</a>
       <a href="{{ url_for('profile_page') }}" {% if active == "profile" %}aria-current="page"{% endif %}>Profile</a>
+      <a href="{{ url_for('settings_page') }}" {% if active == "settings" %}aria-current="page"{% endif %}>Settings</a>
+      <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="secondary" type="submit">Sign out</button>
+      </form>
+      {% else %}
+      <a href="{{ url_for('auth_page') }}">Sign in</a>
+      {% endif %}
     </nav>
   </header>
   <main>
@@ -23,7 +32,8 @@
     {% block body %}{% endblock %}
   </main>
   <footer>
-    <p>Runs on this computer only. Listings are read from public feeds and career pages, including Remotive, Remote OK, Arbeitnow, The Muse, Jobicy, Himalayas, LinkedIn guest listings, Internshala, Unstop, and Greenhouse, Lever, and Ashby. A blocked source is skipped. This app does not publish listings.</p>
+    <p>AI Job Finder searches public listings and ranks them for you. It does not submit applications.</p>
+    <p><a href="{{ url_for('privacy') }}">Privacy</a> · <a href="{{ url_for('terms') }}">Terms</a></p>
   </footer>
 </body>
 </html>

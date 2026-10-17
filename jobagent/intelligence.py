@@ -15,7 +15,7 @@ import httpx
 
 from jobagent.criteria import age_problem, compensation_label, infer_workplace, monthly_pay, stipend_problem
 from jobagent.filters import screen
-from jobagent.matcher import evidence_text, score_job
+from jobagent.matcher import evidence_text, potential_gaps, score_job
 from jobagent.models import Job
 from jobagent.profile import Profile
 from jobagent.safety import mentions_fee
@@ -75,12 +75,21 @@ def apply_natural_request(settings: Settings, text: str) -> None:
         settings.minimum_stipend = float(money.group(1).replace(",", ""))
     if "cyber" in folded and not any("cyber" in sector.casefold() for sector in settings.sectors):
         settings.sectors.append("cybersecurity")
-    if re.search(r"\bintern", folded):
+    if re.search(r"\bpart[- ]time\b", folded):
+        settings.employment = "part-time"
+    elif re.search(r"\bcontract\b", folded):
+        settings.employment = "contract"
+    elif re.search(r"\bintern", folded):
         settings.employment = "intern"
         if not any("intern" in role.casefold() for role in settings.roles):
             settings.roles.append("cybersecurity intern" if "cyber" in folded else "intern")
     elif re.search(r"\bfull[- ]time\b", folded):
         settings.employment = "full-time"
+    if re.search(r"\bunpaid\b", folded) and re.search(r"\b(no|not|don't|dont|avoid|without)\b", folded):
+        settings.avoid_unpaid = True
+    place = re.search(r"\bin ([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b", raw)
+    if place and place.group(1).casefold() not in {"india", "remote", "office", "the"}:
+        settings.location = place.group(1)
     preferred = re.search(r"prefer(?:ably|red)?\s+(.+)$", raw, re.I)
     if preferred:
         for part in re.split(r",| or | and ", preferred.group(1)):
@@ -208,6 +217,10 @@ def why_matches(job: Job, profile: Profile) -> list[str]:
             label = phrase.title() if phrase != "web security" else "Web Security"
             if label not in reasons:
                 reasons.append(label)
+    for line in (profile.projects or "").splitlines():
+        title = line.split("|", 1)[0].strip(" -•\t")
+        if len(title) >= 4 and title.casefold() in blob.casefold() and title not in reasons:
+            reasons.append(title)
     return reasons[:8]
 
 
@@ -227,6 +240,18 @@ def requirement_block(job: Job, settings: Settings) -> str | None:
         return "Not a full-time role"
     if settings.experience_level == "intern" and not re.search(r"intern|trainee", blob):
         return "Not an internship"
+    if level == "part-time" and "part-time" not in blob and "part time" not in blob:
+        return "Not a part-time role"
+    if level == "contract" and "contract" not in blob:
+        return "Not a contract role"
+    if settings.avoid_relocation and re.search(r"relocation is required|must relocate|willing to relocate is required", text, re.I):
+        return "Relocation required"
+    if settings.avoid_sales and re.search(r"\bsales\b", job.title or "", re.I):
+        return "Sales role"
+    if settings.avoid_above_level and settings.experience_level in {"intern", "junior"}:
+        asked = re.search(r"\b(\d+)\+?\s+years?\b", text, re.I)
+        if asked and int(asked.group(1)) >= 2:
+            return "Experience requirement is above your level"
     return None
 
 
@@ -267,8 +292,45 @@ def _opportunity_id(url: str) -> str:
     return hashlib.sha256(canonical_url(url).encode()).hexdigest()[:16]
 
 
+def job_facts(job: Job) -> dict:
+    text = job.description or ""
+    required: list[str] = []
+    preferred: list[str] = []
+    responsibilities: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip(" -\t*")
+        if not line:
+            continue
+        folded = line.casefold()
+        if folded.startswith("responsib") or raw_line.strip().startswith(("-", "•", "*")):
+            if len(line) > 12 and "responsib" not in folded:
+                responsibilities.append(line[:180])
+        if "prefer" in folded and len(line) < 180:
+            preferred.append(line[:180])
+        elif re.search(r"\brequired\b|\bmust have\b", folded) and len(line) < 180:
+            required.append(line[:180])
+    if not required:
+        required = list(job.skills[:8])
+    experience = ""
+    match = re.search(r".{0,40}\b(?:\d+\+?\s+years?|experience).{0,80}", text, re.I)
+    if match:
+        experience = re.sub(r"\s+", " ", match.group(0)).strip()[:160]
+    deadline = ""
+    if job.deadline is not None:
+        deadline = job.deadline.date().isoformat()
+    return {
+        "required_skills": required[:6],
+        "preferred_skills": preferred[:4],
+        "responsibilities": responsibilities[:5],
+        "experience": experience,
+        "deadline": deadline,
+        "employment": job.employment or "",
+    }
+
+
 def _card(job: Job, score: int, profile: Profile, status: str) -> dict:
     url = safe_http_url(job.official_application_url or job.apply_url or job.url)
+    facts = job_facts(job)
     return {
         "id": _opportunity_id(url or job.url),
         "company": job.company,
@@ -281,6 +343,13 @@ def _card(job: Job, score: int, profile: Profile, status: str) -> dict:
         "posted": posted_text(job),
         "availability": status,
         "why": why_matches(job, profile),
+        "gaps": potential_gaps(job, profile),
+        "required_skills": facts["required_skills"],
+        "preferred_skills": facts["preferred_skills"],
+        "responsibilities": facts["responsibilities"],
+        "experience": facts["experience"],
+        "deadline": facts["deadline"],
+        "employment": facts["employment"],
         "application": "Supported" if url else "No application link",
         "official_url": url if job.official_application_verified else "",
         "official_verified": bool(job.official_application_verified and url),
@@ -291,11 +360,16 @@ def _card(job: Job, score: int, profile: Profile, status: str) -> dict:
     }
 
 
-def analyze_job_market(profile: Profile, settings: Settings, target_count: int | None = None, search=None, fetcher=None, verify_limit: int = 15) -> dict:
+def analyze_job_market(profile: Profile, settings: Settings, target_count: int | None = None, search=None, fetcher=None, verify_limit: int = 15, progress=None) -> dict:
     """Search widely, then return the best currently usable opportunities."""
+    def step(message: str) -> None:
+        if progress:
+            progress(message)
+
     target = target_count if target_count is not None else settings.opportunity_count
     target = min(100, max(1, int(target or 20)))
     queries = search_queries(settings)[:8]
+    step("Searching job sources...")
     found = (search or search_all_sources)(settings, queries)
     if len(found) == 2:
         jobs, warnings = found
@@ -303,6 +377,7 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
     else:
         jobs, warnings, report = found
     raw_count = len(jobs)
+    step(f"Analyzing {raw_count} opportunities...")
     normalized = [normalize_listing(job) for job in jobs]
     expired = 0
     usable = []
@@ -314,6 +389,8 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
             continue
         usable.append(job)
     merged, duplicates = merge_duplicates(usable)
+    step("Removing duplicates...")
+    step("Comparing with your resume...")
     rejected: dict[str, int] = {}
     ranked = []
     for job in merged:
@@ -330,6 +407,7 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
             continue
         score = decision.score or score_job(job, profile, settings)
         ranked.append((score, job))
+    step("Ranking your best matches...")
     ranked.sort(key=lambda item: (item[0], item[1].posted_at.timestamp() if item[1].posted_at else 0), reverse=True)
     pool = ranked[: max(target, verify_limit)]
     active = 0
@@ -350,9 +428,10 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
     verified.sort(key=lambda item: (item[1].availability_status == "ACTIVE", item[0]), reverse=True)
     top = verified[:target]
     cards = [_card(job, score, profile, job.availability_status) for score, job in top]
+    visible_report = [row for row in report if row.get("status") != "meta"]
     return {
         "opportunities": cards,
-        "source_report": report,
+        "source_report": visible_report,
         "warnings": warnings,
         "found": raw_count,
         "analyzed": len(merged),
@@ -363,4 +442,5 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
         "rejection_counts": rejected,
         "qualified": len(ranked),
         "final_count": len(cards),
+        "discovered": next((row.get("count") or 0 for row in report if row.get("name") == "_discovered"), raw_count),
     }

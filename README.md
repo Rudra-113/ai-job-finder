@@ -1,6 +1,6 @@
 # Job Agent
 
-A private job and internship agent that runs only on your Windows computer. You set a sector, roles, and pay floor. It searches public listings, checks which ones still look open, and ranks the best matches for your CV. Nothing is submitted until you click **Apply directly** or **Apply to selected**. Review before submit holds a selected form until you click Submit.
+AI Job & Internship Finder runs on your computer. You sign in, upload a resume, and describe the roles you want. It searches public listings, checks which ones still look open, and ranks the best matches. **Apply on official site** opens the employer's page in a new tab. This app does not fill or submit applications.
 
 The page listens on [http://127.0.0.1:47321](http://127.0.0.1:47321). It does not accept connections from other computers.
 
@@ -74,13 +74,11 @@ A listing outside these rules is skipped. Preferred companies also have their pu
 
 ### 3. Start
 
-On **Search**, confirm the sector, roles, minimum stipend, minimum match score, and number of opportunities. You can also type a request such as “Find me 20 remote cybersecurity internships in India, minimum ₹10000 stipend, preferably SOC or security research.” Then click **Start continuous search**.
+On **Search**, describe what you want, set how many opportunities to return, and click **Search**. Example: “Find me 20 remote cybersecurity internships in India, minimum ₹10000 stipend, preferably SOC or security research.”
 
-The search reads every source it can, combines the listings, drops closed ones, removes duplicates, and scores the rest against your CV. The number you enter is how many final opportunities to show. Searching does not submit applications.
+The search reads every source it can, combines the listings, drops closed ones, removes duplicates, and scores the rest against your resume. The number you enter is how many final opportunities to show.
 
-**Apply directly** opens that one opportunity, fills the form from your profile, and submits it when the required fields are present. **Apply to selected** does the same for the checked jobs, one at a time. **Review before submit** holds a filled form until you click **Submit**. **Skip** closes that form without sending it. **Edit / Continue** writes answers you type, one per line as `Question: answer`.
-
-A CAPTCHA, identity check, payment request, login wall, mandatory video, or missing required fact stops that one application, records the reason, and continues with the other selected jobs. Recent attempts are listed on the Search page, and `data\agent.log` has the same reason.
+**View details** opens the match explanation. **Apply on official site** opens the employer’s application page when that link is a verified company application. You apply there yourself.
 
 Missing pay is kept and shown as compensation not disclosed. Unpaid roles are skipped. A stated stipend below your minimum is skipped. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
 
