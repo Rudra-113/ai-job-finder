@@ -27,12 +27,23 @@ class Job:
     salary_currency: str = ""
     posted_at: datetime | None = None
     deadline: datetime | None = None
+    country: str = ""
+    skills: list[str] = field(default_factory=list)
+    requirements: list[str] = field(default_factory=list)
+    official_application_url: str = ""
+    official_application_verified: bool = False
+    source_listing_id: str = ""
+    availability_status: str = ""
+    sources: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.apply_url:
             self.apply_url = self.url
         self.description = (self.description or "")[:15000]
         self.tags = [str(tag).strip() for tag in self.tags if str(tag).strip()][:40]
+        self.skills = [str(item).strip() for item in self.skills if str(item).strip()][:40]
+        self.requirements = [str(item).strip() for item in self.requirements if str(item).strip()][:40]
+        self.sources = [str(item).strip() for item in self.sources if str(item).strip()][:12]
 
 
 @dataclass

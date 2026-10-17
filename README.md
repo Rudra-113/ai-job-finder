@@ -1,6 +1,6 @@
 # Job Agent
 
-A private job and internship agent that runs only on your Windows computer. You set a sector, roles, and pay floor. It searches public listings until you click Stop, scores them against your CV, and applies to each qualified job in turn. A complete form is submitted automatically. Review before submit holds the form until you click Submit.
+A private job and internship agent that runs only on your Windows computer. You set a sector, roles, and pay floor. It searches public listings, checks which ones still look open, and ranks the best matches for your CV. Nothing is submitted until you click **Apply directly** or **Apply to selected**. Review before submit holds a selected form until you click Submit.
 
 The page listens on [http://127.0.0.1:47321](http://127.0.0.1:47321). It does not accept connections from other computers.
 
@@ -63,23 +63,28 @@ Open **Settings** and save every rule the agent must follow:
 - Preferred companies
 - Excluded companies
 - Minimum match score, from 0 to 100
+- Number of opportunities to return after ranking
+- Internship, full-time, or any
+- Experience level
+- Skip mandatory video applications
+- Require disclosed compensation, off by default so an unstated stipend stays in the list
 - Review before submit, off by default
 
 A listing outside these rules is skipped. Preferred companies also have their public Greenhouse, Lever, and Ashby career pages checked. They are not a closed list: other companies can still match from the job boards. A company whose name contains an excluded name is never opened.
 
 ### 3. Start
 
-On **Search**, confirm the sector, roles, minimum stipend, and minimum match score, then click **Start continuous search**.
+On **Search**, confirm the sector, roles, minimum stipend, minimum match score, and number of opportunities. You can also type a request such as “Find me 20 remote cybersecurity internships in India, minimum ₹10000 stipend, preferably SOC or security research.” Then click **Start continuous search**.
 
-The agent searches until you click **Stop**. Every qualified job is queued and then opened, one at a time. When the form can be completed from your profile, it is submitted and the next job starts. There is no wait between applications.
+The search reads every source it can, combines the listings, drops closed ones, removes duplicates, and scores the rest against your CV. The number you enter is how many final opportunities to show. Searching does not submit applications.
 
-**Review before submit** in Settings holds a filled form until you click **Submit**. **Skip** closes that form without sending it. **Edit / Continue** writes answers you type, one per line as `Question: answer`.
+**Apply directly** opens that one opportunity, fills the form from your profile, and submits it when the required fields are present. **Apply to selected** does the same for the checked jobs, one at a time. **Review before submit** holds a filled form until you click **Submit**. **Skip** closes that form without sending it. **Edit / Continue** writes answers you type, one per line as `Question: answer`.
 
-A CAPTCHA, identity check, payment request, login wall, mandatory video, or missing required fact is recorded with the reason and the next job starts. The search does not stop because one site failed. Recent attempts are listed on the Search page, and `data\agent.log` has the same reason.
+A CAPTCHA, identity check, payment request, login wall, mandatory video, or missing required fact stops that one application, records the reason, and continues with the other selected jobs. Recent attempts are listed on the Search page, and `data\agent.log` has the same reason.
 
-Missing pay is kept and marked unknown. Unpaid roles are skipped. A stated stipend below your minimum is skipped. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
+Missing pay is kept and shown as compensation not disclosed. Unpaid roles are skipped. A stated stipend below your minimum is skipped. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
 
-The counters are Found, Qualified, Needs review, Filled, Submitted, Skipped, and Failed. Each submitted application lists the company, role, date, application URL, match score, and status.
+The counters include Found, Rejected, Qualified, Analyzed, Active, Duplicates removed, Final, Needs review, Filled, Submitted, Skipped, and Failed. Each submitted application lists the company, role, date, application URL, match score, resume, and status.
 
 ## When it stops and asks you
 
@@ -134,12 +139,12 @@ You can also copy `.env.example` to `.env` and fill the same values. The app rea
 ## Limits
 
 - Closed listings and listings past their deadline are skipped. A missing posting date is not, by itself, a reason to skip
-- Search continues until you click Stop. One form is open at a time. There is no application cap and no 30-minute wait
+- Search continues until you click Stop. One selected application is open at a time. There is no 30-minute wait
 - Hourly and weekly pay are counted only when the listing says full-time. The low end of a range is used. Currency is not converted
 - Workday and Taleo pages stop at the login wall
 - Duplicate protection lives in `data\applications.json`. Deleting that file allows the same job to be considered again
 
-Sources that expose a public listing feed are searched with several role phrases, including your own roles: Remotive, Remote OK, Arbeitnow, The Muse, Jobicy, Himalayas, LinkedIn's public guest listings, Internshala, and Greenhouse, Lever, and Ashby pages for preferred companies. Indeed, Naukri, Foundit, Cutshort, and Wellfound are checked only when a public page actually contains listings. Many of those sites hide jobs behind a login or a block, and this agent does not bypass that. It does not see every job on the internet, and it does not republish listings.
+Sources that expose a public listing feed are searched with several role phrases, including your own roles: Remotive, Remote OK, Arbeitnow, The Muse, Jobicy, Himalayas, LinkedIn's public guest listings, Internshala, Unstop's public internship search, Upwork's public RSS when it is readable, and Greenhouse, Lever, and Ashby pages for preferred companies. Indeed, Naukri, Foundit, Cutshort, Wellfound, and Upwork are recorded as unavailable when the public page is blocked. This agent does not bypass login, CAPTCHA, or anti-bot checks. It does not see every job on the internet, and it does not republish listings.
 
 ## Files on this computer
 

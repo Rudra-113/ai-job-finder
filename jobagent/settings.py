@@ -24,6 +24,11 @@ class Settings:
     minimum_score: int = 70
     allow_hybrid: bool = False
     manual_review: bool = False
+    opportunity_count: int = 20
+    employment: str = "any"
+    experience_level: str = "any"
+    avoid_video: bool = False
+    require_disclosed_pay: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -38,6 +43,11 @@ class Settings:
             "minimum_score": self.minimum_score,
             "allow_hybrid": self.allow_hybrid,
             "manual_review": self.manual_review,
+            "opportunity_count": self.opportunity_count,
+            "employment": self.employment,
+            "experience_level": self.experience_level,
+            "avoid_video": self.avoid_video,
+            "require_disclosed_pay": self.require_disclosed_pay,
         }
 
     @classmethod
@@ -65,7 +75,25 @@ class Settings:
             minimum_score=min(100, max(0, score)),
             allow_hybrid=bool(data.get("allow_hybrid")),
             manual_review=bool(data.get("manual_review")),
+            opportunity_count=_count(data.get("opportunity_count")),
+            employment=_choice(data.get("employment"), ("any", "intern", "full-time"), "any"),
+            experience_level=_choice(data.get("experience_level"), ("any", "intern", "junior"), "any"),
+            avoid_video=bool(data.get("avoid_video")),
+            require_disclosed_pay=bool(data.get("require_disclosed_pay")),
         )
+
+
+def _count(value) -> int:
+    try:
+        count = int(value if value is not None else 20)
+    except (TypeError, ValueError):
+        count = 20
+    return min(100, max(1, count))
+
+
+def _choice(value, allowed: tuple[str, ...], default: str) -> str:
+    text = str(value or default).strip().casefold()
+    return text if text in allowed else default
 
 
 def _list(value) -> list[str]:
@@ -123,6 +151,11 @@ def apply_main_fields(settings: Settings, form) -> str | None:
     settings.roles = split_csv(roles)
     settings.minimum_stipend = stipend
     settings.minimum_score = score
+    if (form.get("opportunity_count") or "").strip():
+        settings.opportunity_count = _count(form.get("opportunity_count"))
+    from jobagent.intelligence import apply_natural_request
+
+    apply_natural_request(settings, form.get("request") or "")
     return None
 
 
@@ -152,5 +185,10 @@ def apply_settings_form(form) -> tuple[Settings, str | None]:
         minimum_score=score,
         allow_hybrid=(form.get("allow_hybrid") or "") in {"1", "on", "true", "yes"},
         manual_review=(form.get("manual_review") or "") in {"1", "on", "true", "yes"},
+        opportunity_count=_count(form.get("opportunity_count")),
+        employment=_choice(form.get("employment"), ("any", "intern", "full-time"), "any"),
+        experience_level=_choice(form.get("experience_level"), ("any", "intern", "junior"), "any"),
+        avoid_video=(form.get("avoid_video") or "") in {"1", "on", "true", "yes"},
+        require_disclosed_pay=(form.get("require_disclosed_pay") or "") in {"1", "on", "true", "yes"},
     )
     return settings, None

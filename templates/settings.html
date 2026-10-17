@@ -17,8 +17,24 @@
   <input id="location" name="location" value="{{ settings.location }}">
   <p class="hint">Use the full place name. Remote listings must allow this place when they state a restriction.</p>
   <label class="check" for="allow_hybrid"><input id="allow_hybrid" name="allow_hybrid" type="checkbox" {% if settings.allow_hybrid %}checked{% endif %}> Allow hybrid</label>
+  <label for="opportunity_count">Number of opportunities</label>
+  <input id="opportunity_count" name="opportunity_count" type="number" min="1" max="100" step="1" value="{{ settings.opportunity_count }}">
+  <label for="employment">Internship or full-time</label>
+  <select id="employment" name="employment">
+    {% for value, label in [("any", "Any"), ("intern", "Internship"), ("full-time", "Full-time")] %}
+    <option value="{{ value }}" {% if settings.employment == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label for="experience_level">Experience level</label>
+  <select id="experience_level" name="experience_level">
+    {% for value, label in [("any", "Any"), ("intern", "Intern"), ("junior", "Junior")] %}
+    <option value="{{ value }}" {% if settings.experience_level == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label class="check" for="avoid_video"><input id="avoid_video" name="avoid_video" type="checkbox" {% if settings.avoid_video %}checked{% endif %}> Skip mandatory video applications</label>
+  <label class="check" for="require_disclosed_pay"><input id="require_disclosed_pay" name="require_disclosed_pay" type="checkbox" {% if settings.require_disclosed_pay %}checked{% endif %}> Require disclosed compensation</label>
   <label class="check" for="manual_review"><input id="manual_review" name="manual_review" type="checkbox" {% if settings.manual_review %}checked{% endif %}> Review before submit</label>
-  <p class="hint">Leave this off to submit a complete application and move to the next job. Turn it on to hold each filled form until you click Submit.</p>
+  <p class="hint">Leave this off and Apply directly submits a complete form, then moves to the next selected job. Turn it on to hold each filled form until you click Submit.</p>
   <p class="hint">Hybrid roles are skipped unless this is checked. On-site roles are skipped when Remote is selected. Missing pay is kept and marked unknown. Unpaid roles are skipped.</p>
   <label for="workplace">Remote/onsite</label>
   <select id="workplace" name="workplace">

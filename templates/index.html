@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block body %}
 <h1>Search</h1>
-<p class="hint">Search keeps running until you press Stop. Each qualified job is opened and filled. A complete form is submitted, then the next job starts.</p>
-<p class="hint">{% if settings.manual_review %}Review before submit is on. A filled form waits here for Submit.{% else %}Automatic mode is on. Submit on this page is only for review mode.{% endif %}</p>
+<p class="hint">Search keeps running until you press Stop. It lists the best openings it can verify. Nothing is submitted until you click Apply directly.</p>
+<p class="hint">{% if settings.manual_review %}Review before submit is on. Apply directly fills the form and waits here.{% else %}Apply directly fills and submits only the jobs you select.{% endif %}</p>
 <p id="status-line" role="status">{{ status_line }}</p>
 <p>Search status: <strong id="search-status">{{ search_status }}</strong></p>
 
@@ -17,6 +17,11 @@
   <p class="hint">Monthly amount. Use 0 to allow listings that do not state pay. Unpaid listings are always skipped. Currency is not converted.</p>
   <label for="minimum_score">Minimum match score</label>
   <input id="minimum_score" name="minimum_score" type="number" min="0" max="100" step="1" value="{{ settings.minimum_score }}" required>
+  <label for="opportunity_count">Number of opportunities</label>
+  <input id="opportunity_count" name="opportunity_count" type="number" min="1" max="100" step="1" value="{{ settings.opportunity_count }}" required>
+  <p class="hint">This is how many final matches to show, not how many listings to stop after.</p>
+  <label for="request">Request</label>
+  <textarea id="request" name="request" placeholder="Find me 20 remote cybersecurity internships in India, minimum ₹10000 stipend, preferably SOC or security research."></textarea>
   <button type="submit">Start continuous search</button>
 </form>
 
@@ -27,6 +32,7 @@
 
 <dl class="counts">
   <dt>Found</dt><dd id="found">{{ found }}</dd>
+  <dt>Rejected</dt><dd id="rejected">{{ rejected }}</dd>
   <dt>In queue</dt><dd id="queue-size">{{ queue_size }}</dd>
   <dt>Qualified</dt><dd id="qualified">{{ qualified }}</dd>
   <dt>Needs review</dt><dd id="needs-review">{{ needs_review }}</dd>
@@ -34,7 +40,54 @@
   <dt>Submitted</dt><dd id="submitted">{{ submitted }}</dd>
   <dt>Skipped</dt><dd id="skipped">{{ skipped }}</dd>
   <dt>Failed</dt><dd id="failed">{{ failed }}</dd>
+  <dt>Analyzed</dt><dd id="analyzed">{{ analyzed }}</dd>
+  <dt>Active</dt><dd id="active">{{ active_count }}</dd>
+  <dt>Duplicates removed</dt><dd id="duplicates">{{ duplicates }}</dd>
+  <dt>Final</dt><dd id="final-count">{{ final_count }}</dd>
 </dl>
+
+<section id="sources">
+  {% if source_report %}
+  <h2>Sources searched</h2>
+  <ul>
+    {% for row in source_report %}
+    <li>{{ row.name }}: {% if row.status == 'ok' %}{{ row.count }} listings{% elif row.status == 'unavailable' %}Unavailable / not accessible{% else %}No public listings{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section id="opportunities">
+  {% if opportunities %}
+  <h2>Opportunities</h2>
+  <form method="post" action="{{ url_for('apply_selected') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for card in opportunities %}
+    <article class="note">
+      <h3>{{ card.role }}</h3>
+      <p>Company: {{ card.company }}</p>
+      <p>Match: {{ card.match_score }}%</p>
+      <p>Source: {{ card.sources | join(' + ') }}</p>
+      <p>Location: {{ card.location or "Not stated" }}</p>
+      <p>Work mode: {{ card.work_mode }}</p>
+      <p>Stipend: {{ card.compensation }}</p>
+      <p>Posted: {{ card.posted or "date not listed" }}</p>
+      <p>Availability: {{ card.availability }}</p>
+      {% if card.why %}<p>Why it matches: {% for item in card.why %}✓ {{ item }} {% endfor %}</p>{% endif %}
+      <p>Application: {{ card.application }}</p>
+      {% if card.official_verified and card.official_url %}
+      <p><a href="{{ card.official_url }}" rel="noopener noreferrer">Open official application</a></p>
+      {% else %}
+      <p>Official application link could not be verified.{% if card.url %} <a href="{{ card.url }}" rel="noopener noreferrer">Open listing</a>{% endif %}</p>
+      {% endif %}
+      <label class="check"><input type="checkbox" name="job_id" value="{{ card.id }}"> Select</label>
+      <button type="submit" name="apply_one" value="{{ card.id }}">Apply directly</button>
+    </article>
+    {% endfor %}
+    <button type="submit">Apply to selected</button>
+  </form>
+  {% endif %}
+</section>
 
 <section id="current">
   {% if current %}

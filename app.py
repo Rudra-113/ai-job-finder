@@ -93,10 +93,12 @@ def create_app(home: Path | None = None) -> Flask:
         home_path = current_home()
         settings = load_settings(home_path)
         snap = _snapshot(home_path)
+        active_count = snap.pop("active", 0)
         return render_template(
             "index.html",
             title="Search",
             active="search",
+            active_count=active_count,
             settings=settings,
             sector=", ".join(settings.sectors),
             roles=", ".join(settings.roles),
@@ -123,6 +125,25 @@ def create_app(home: Path | None = None) -> Flask:
         agent().start()
         return redirect(url_for("index"))
 
+    @app.post("/opportunities/apply")
+    def apply_selected():
+        home_path = current_home()
+        one = (request.form.get("apply_one") or "").strip()
+        wanted = {one} if one else set(request.form.getlist("job_id"))
+        cards = [card for card in (load_state(home_path).get("opportunities") or []) if card.get("id") in wanted]
+        if not cards:
+            set_flash("Select an opportunity before applying.")
+            return redirect(url_for("index"))
+        from jobagent.runner import job_from_opportunity
+
+        items = [(job_from_opportunity(card), int(card.get("match_score") or 0)) for card in cards if card.get("url")]
+        if not items:
+            set_flash("That opportunity has no application link.")
+            return redirect(url_for("index"))
+        agent().request_apply(items)
+        set_flash(f"Applying to {len(items)} selected job{'s' if len(items) != 1 else ''}. Other listings stay untouched.")
+        return redirect(url_for("index"))
+
     @app.post("/stop")
     def stop():
         agent().request_stop()
@@ -132,7 +153,7 @@ def create_app(home: Path | None = None) -> Flask:
     @app.post("/application/submit")
     def submit_application():
         if not agent().session.is_open():
-            set_flash("No form is waiting. Complete applications are submitted automatically. Turn on Review before submit to hold each form.")
+            set_flash("No form is waiting. Apply directly submits a job you choose. Turn on Review before submit to hold that form.")
             return redirect(url_for("index"))
         agent().request_submit()
         set_flash("Submitting the open application.")
@@ -342,6 +363,12 @@ def _snapshot(home: Path) -> dict:
         "applications": submitted[:100],
         "attention": attention,
         "attempts": _attempts(records),
+        "opportunities": state.get("opportunities") or [],
+        "source_report": state.get("source_report") or [],
+        "analyzed": state.get("analyzed") or 0,
+        "active": state.get("active") or 0,
+        "duplicates": state.get("duplicates") or 0,
+        "final_count": state.get("final_count") or 0,
     }
 
 

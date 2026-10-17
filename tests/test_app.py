@@ -35,7 +35,8 @@ def test_pages_and_csrf_and_host(tmp_path):
     assert b"Minimum stipend" in page.data
     assert b"Minimum match score" in page.data
     assert b"Start continuous search" in page.data
-    assert b"Automatic mode is on" in page.data
+    assert b"Nothing is submitted until you click Apply directly." in page.data
+    assert b"Number of opportunities" in page.data
     assert b"Found" in page.data
     assert b"Qualified" in page.data
     assert b"Submit" in page.data
@@ -50,7 +51,11 @@ def test_pages_and_csrf_and_host(tmp_path):
 
 def test_settings_roundtrip_and_start_requires_profile(tmp_path):
     app, client = _client(tmp_path)
-    token = _csrf(client.get("/settings").data.decode())
+    settings_page = client.get("/settings").data
+    assert b"Number of opportunities" in settings_page
+    assert b"Skip mandatory video applications" in settings_page
+    assert b"Require disclosed compensation" in settings_page
+    token = _csrf(settings_page.decode())
     saved = client.post(
         "/settings",
         data={
@@ -120,18 +125,18 @@ def test_cycle_applies_once_and_skips_the_rest(tmp_path, monkeypatch):
         return ApplyResult("submitted", "The site confirmed the application.", "", True, True)
 
     monkeypatch.setattr("jobagent.runner.search_jobs", lambda _settings, _queries=None: ([good, unpaid, outside], []))
+    monkeypatch.setattr("jobagent.runner.polite_fetcher", lambda _url: None)
     monkeypatch.setattr("jobagent.runner.open_application", fake_apply)
     run_cycle(home)
-    assert calls == [good.url]
-    state = json.loads((home / "state.json").read_text(encoding="utf-8"))
-    assert state["submitted"] == 1
-    assert state["rejected"] >= 2
-    calls.clear()
-    run_cycle(home)
     assert calls == []
+    state = json.loads((home / "state.json").read_text(encoding="utf-8"))
+    assert state["submitted"] == 0
+    assert state["final_count"] == 1
+    assert state["opportunities"][0]["company"] == "Northwind"
+    assert state["rejected"] >= 2
 
 
-def test_every_qualified_job_is_attempted(tmp_path, monkeypatch):
+def test_search_lists_jobs_and_selected_applies_run(tmp_path, monkeypatch):
     home = tmp_path
     save_profile(home, strong_profile(home))
     save_settings(home, strong_settings())
@@ -149,22 +154,21 @@ def test_every_qualified_job_is_attempted(tmp_path, monkeypatch):
             return ApplyResult("failed", "", "Could not find an application form on this page.", True, False)
         return ApplyResult("submitted", "The site confirmed the application.", "", True, True)
 
-    served = {"done": False}
-
-    def search(_settings, _queries=None):
-        if served["done"]:
-            return [], []
-        served["done"] = True
-        return jobs, []
-
-    monkeypatch.setattr("jobagent.runner.search_jobs", search)
+    monkeypatch.setattr("jobagent.runner.search_jobs", lambda _settings, _queries=None: (jobs, []))
+    monkeypatch.setattr("jobagent.runner.polite_fetcher", lambda _url: None)
     monkeypatch.setattr("jobagent.runner.open_application", fake_apply)
-    queue = []
-    cursor = [0]
+    run_cycle(home)
+    assert seen == []
+    listed = json.loads((home / "state.json").read_text(encoding="utf-8"))
+    assert listed["submitted"] == 0
+    assert listed["final_count"] == 5
+    assert {card["company"] for card in listed["opportunities"]} == {f"Co{index}" for index in range(5)}
+
+    queue = [(job, 90) for job in jobs]
     totals = {
-        "found": 0,
-        "rejected": 0,
-        "qualified": 0,
+        "found": listed["found"],
+        "rejected": listed["rejected"],
+        "qualified": listed["qualified"],
         "needs_review": 0,
         "filled": 0,
         "submitted": 0,
@@ -172,11 +176,10 @@ def test_every_qualified_job_is_attempted(tmp_path, monkeypatch):
         "failed": 0,
     }
     for _ in range(5):
-        run_cycle(home, queue=queue, cursor=cursor, totals=totals)
+        run_cycle(home, queue=queue, totals=totals)
     assert seen == ["Co0", "Co1", "Co2", "Co3", "Co4"]
     assert queue == []
     state = json.loads((home / "state.json").read_text(encoding="utf-8"))
-    assert state["qualified"] == 5
     assert state["submitted"] == 3
     assert state["needs_review"] == 1
     assert state["failed"] == 1
@@ -184,8 +187,10 @@ def test_every_qualified_job_is_attempted(tmp_path, monkeypatch):
     submitted = next(row for row in records if row["company"] == "Co0")
     assert submitted["status"] == "submitted"
     assert submitted["submitted_at"]
+    assert submitted["found_at"]
     assert submitted["resume"] == "cv.txt"
     assert submitted["match_score"] >= 70
+    assert submitted["application_url"].startswith("https://jobs.example.com/c0")
 
 
 def test_runner_submits_a_local_form_then_records_the_captcha(tmp_path, monkeypatch):
@@ -202,21 +207,11 @@ def test_runner_submits_a_local_form_then_records_the_captcha(tmp_path, monkeypa
     bad_url = f"http://127.0.0.1:{blocked.server_address[1]}/job"
     good = strong_job(company="Northwind", url=good_url, apply_url=good_url)
     bad = strong_job(company="Blocked", url=bad_url, apply_url=bad_url)
-    served = {"done": False}
-
-    def search(_settings, _queries=None):
-        if served["done"]:
-            return [], []
-        served["done"] = True
-        return [good, bad], []
-
-    monkeypatch.setattr("jobagent.runner.search_jobs", search)
-    queue = []
-    cursor = [0]
+    queue = [(good, 90), (bad, 90)]
     totals = {
         "found": 0,
         "rejected": 0,
-        "qualified": 0,
+        "qualified": 2,
         "needs_review": 0,
         "filled": 0,
         "submitted": 0,
@@ -224,8 +219,8 @@ def test_runner_submits_a_local_form_then_records_the_captcha(tmp_path, monkeypa
         "failed": 0,
     }
     try:
-        run_cycle(home, queue=queue, cursor=cursor, totals=totals)
-        run_cycle(home, queue=queue, cursor=cursor, totals=totals)
+        run_cycle(home, queue=queue, totals=totals)
+        run_cycle(home, queue=queue, totals=totals)
     finally:
         ready.shutdown()
         ready.server_close()
@@ -242,6 +237,49 @@ def test_runner_submits_a_local_form_then_records_the_captcha(tmp_path, monkeypa
     assert by_company["Blocked"]["status"] == "needs_user"
     assert "captcha" in by_company["Blocked"]["reason"].lower()
     assert queue == []
+
+
+def test_apply_directly_uses_only_the_clicked_job(tmp_path, monkeypatch):
+    app, client = _client(tmp_path)
+    from jobagent.runner import write_state
+
+    write_state(
+        tmp_path,
+        opportunities=[
+            {
+                "id": "aaa",
+                "company": "Northwind",
+                "role": "Data Analyst Intern",
+                "url": "https://jobs.example.com/a",
+                "source_url": "https://www.linkedin.com/jobs/view/a",
+                "match_score": 90,
+            },
+            {
+                "id": "bbb",
+                "company": "Other",
+                "role": "Data Analyst Intern",
+                "url": "https://jobs.example.com/b",
+                "source_url": "https://jobs.example.com/b",
+                "match_score": 80,
+            },
+        ],
+    )
+    captured = []
+    monkeypatch.setattr(app.extensions["agent"], "request_apply", lambda items: captured.append(items))
+    token = _csrf(client.get("/").data.decode())
+    empty = client.post("/opportunities/apply", data={"csrf": token}, follow_redirects=True)
+    assert b"Select an opportunity before applying." in empty.data
+    assert captured == []
+    chosen = client.post(
+        "/opportunities/apply",
+        data={"csrf": token, "apply_one": "aaa", "job_id": ["aaa", "bbb"]},
+        follow_redirects=True,
+    )
+    assert b"Applying to 1 selected job." in chosen.data
+    assert len(captured) == 1
+    assert len(captured[0]) == 1
+    assert captured[0][0][0].company == "Northwind"
+    assert captured[0][0][0].apply_url == "https://jobs.example.com/a"
 
 
 def test_cycle_does_not_search_without_a_profile(tmp_path, monkeypatch):

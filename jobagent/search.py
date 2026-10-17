@@ -547,7 +547,7 @@ def parse_internshala(html: str) -> list[Job]:
 
 def fetch_linkedin(client: httpx.Client, queries: list[str]) -> tuple[list[Job], str | None]:
     found: list[Job] = []
-    for query in queries[:2]:
+    for query in queries[:4]:
         url = (
             "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords="
             + quote_plus(query)
@@ -575,6 +575,103 @@ def fetch_internshala(client: httpx.Client, queries: list[str]) -> tuple[list[Jo
             return found, "unavailable"
         found.extend(parse_internshala(response.text))
     return found, None if found else "no public listings"
+
+
+def parse_unstop(payload: dict) -> list[Job]:
+    page = payload.get("data") if isinstance(payload, dict) else None
+    rows = page.get("data") if isinstance(page, dict) else None
+    if not isinstance(rows, list):
+        return []
+    jobs: list[Job] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        org = item.get("organisation") if isinstance(item.get("organisation"), dict) else {}
+        public = str(item.get("public_url") or "").lstrip("/")
+        url = f"https://unstop.com/{public}" if public else ""
+        detail = item.get("jobDetail") if isinstance(item.get("jobDetail"), dict) else {}
+        regs = item.get("regnRequirements") if isinstance(item.get("regnRequirements"), dict) else {}
+        workplace = "unknown"
+        if str(detail.get("type") or "").casefold() in {"wfh", "remote"} or str(item.get("region") or "").casefold() == "online":
+            workplace = "remote"
+        disclosed = detail.get("not_disclosed") is not True and detail.get("show_salary")
+        salary = as_float(detail.get("min_salary")) if disclosed else None
+        currency = "INR" if "rupee" in str(detail.get("currency") or "") else ""
+        skills = []
+        for skill in item.get("required_skills") or []:
+            if isinstance(skill, dict) and skill.get("name"):
+                skills.append(str(skill["name"]))
+        closed = item.get("regn_open") in {0, False} or str(item.get("status") or "").upper() not in {"", "LIVE"}
+        job = _job(
+            "unstop",
+            str(org.get("name") or ""),
+            str(item.get("title") or ""),
+            url,
+            description=clean_html(str(item.get("details") or "")),
+            workplace=workplace,
+            remote=True if workplace == "remote" else None,
+            employment=str(item.get("subtype") or ""),
+            salary_min=salary,
+            salary_period="month" if detail.get("pay_in") == "monthly" and salary is not None else "",
+            salary_currency=currency,
+            posted_at=parse_date(item.get("approved_date") or item.get("updated_at")),
+            deadline=parse_date(regs.get("end_regn_dt")),
+            tags=skills,
+            skills=skills,
+            source_listing_id=str(item.get("id") or ""),
+            availability_status="EXPIRED" if closed else "",
+        )
+        if job:
+            jobs.append(job)
+    return jobs
+
+
+def fetch_unstop(client: httpx.Client, queries: list[str]) -> tuple[list[Job], str | None]:
+    found: list[Job] = []
+    error = None
+    for query in (queries or ["intern"])[:3]:
+        url = (
+            "https://unstop.com/api/public/opportunity/search-result?opportunity=internships&per_page=20&searchTerm="
+            + quote_plus(query)
+        )
+        response = _polite(client, url)
+        if response is None or response.status_code in {401, 403, 429}:
+            return found, "blocked"
+        if response.status_code != 200:
+            error = "unavailable"
+            continue
+        try:
+            payload = response.json()
+        except ValueError:
+            error = "unavailable"
+            continue
+        found.extend(parse_unstop(payload))
+    return found, error if not found else None
+
+
+def fetch_upwork(client: httpx.Client, queries: list[str]) -> tuple[list[Job], str | None]:
+    """Public RSS only. A 403 or challenge returns nothing and is not bypassed."""
+    query = quote_plus(queries[0] if queries else "intern")
+    response = _polite(client, f"https://www.upwork.com/ab/feed/jobs/rss?q={query}&sort=recency")
+    if response is None or response.status_code in {401, 403, 429, 503}:
+        return [], "blocked"
+    if response.status_code != 200:
+        return [], "unavailable"
+    text = response.text[:2500].casefold()
+    if "captcha" in text or "access denied" in text or "just a moment" in text:
+        return [], "blocked"
+    if "<item>" not in response.text.casefold():
+        return [], "no public listings"
+    jobs: list[Job] = []
+    for chunk in re.findall(r"<item>(.*?)</item>", response.text, flags=re.I | re.S)[:20]:
+        title = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", chunk, re.I | re.S)
+        link = re.search(r"<link>(.*?)</link>", chunk, re.I | re.S)
+        if not title or not link:
+            continue
+        job = _job("upwork", "Upwork client", unescape(re.sub(r"<[^>]+>", "", title.group(1))).strip(), unescape(link.group(1)).strip())
+        if job:
+            jobs.append(job)
+    return jobs, None if jobs else "no public listings"
 
 
 def fetch_extra_boards(client: httpx.Client, queries: list[str]) -> tuple[list[Job], list[str]]:
@@ -626,10 +723,24 @@ def _run_fetch(fn, settings: Settings, queries: list[str]) -> tuple[list[Job], s
             return fn(client, settings)
 
 
-def search_jobs(settings: Settings, queries: list[str] | None = None) -> tuple[list[Job], list[str]]:
+def _source_row(name: str, count: int, note: str | None) -> dict:
+    if note in {"blocked", "unavailable"} or (note or "").startswith("blocked"):
+        status = "unavailable"
+    elif count:
+        status = "ok"
+    elif note:
+        status = "empty"
+    else:
+        status = "empty"
+    return {"name": name, "count": count, "status": status, "note": note or ""}
+
+
+def search_all_sources(settings: Settings, queries: list[str] | None = None) -> tuple[list[Job], list[str], list[dict]]:
+    """Search every configured public source. One failure does not cancel the others."""
     warnings: list[str] = []
     jobs: list[Job] = []
-    chosen = list(queries or search_queries(settings)[:3])
+    report: list[dict] = []
+    chosen = list(queries or search_queries(settings)[:8])
     fetches = (
         ("Remotive", fetch_remotive),
         ("Remote OK", fetch_remoteok),
@@ -641,15 +752,29 @@ def search_jobs(settings: Settings, queries: list[str] | None = None) -> tuple[l
 
     def extra(client: httpx.Client, _settings: Settings, query_list: list[str] | None = None) -> tuple[list[Job], str | None]:
         query_list = query_list or []
-        linked, linked_note = fetch_linkedin(client, query_list)
-        intern, intern_note = fetch_internshala(client, query_list)
-        _empty, notes = fetch_extra_boards(client, query_list)
-        batch = linked + intern
+        batch: list[Job] = []
         messages = []
-        if linked_note:
-            messages.append(f"LinkedIn {linked_note}")
-        if intern_note:
-            messages.append(f"Internshala {intern_note}")
+        for name, fn in (
+            ("LinkedIn", fetch_linkedin),
+            ("Internshala", fetch_internshala),
+            ("Unstop", fetch_unstop),
+            ("Upwork", fetch_upwork),
+        ):
+            try:
+                found, note = fn(client, query_list)
+            except Exception:
+                found, note = [], "unavailable"
+            batch.extend(found)
+            report.append(_source_row(name, len(found), note))
+            if note and note not in {"no public listings"}:
+                messages.append(f"{name} {note}")
+            elif note:
+                messages.append(f"{name} had no public listing feed to read")
+        _empty, notes = fetch_extra_boards(client, query_list)
+        for note in notes:
+            source_name = note.split(" ", 1)[0]
+            status_note = "blocked" if "blocked" in note else "empty" if "no public" in note else "unavailable"
+            report.append(_source_row(source_name, 0, status_note))
         messages.extend(notes)
         return batch, "; ".join(messages) if messages else None
 
@@ -662,10 +787,15 @@ def search_jobs(settings: Settings, queries: list[str] | None = None) -> tuple[l
                 batch, error = future.result()
             except Exception:
                 warnings.append(name)
+                if name != "More boards":
+                    report.append(_source_row(name, 0, "unavailable"))
                 continue
+            if name != "More boards":
+                report.append(_source_row(name, len(batch), "unavailable" if error and not batch else None))
             if error:
                 warnings.append(f"{name}: {error}" if name == "More boards" else name)
             jobs.extend(batch)
+    company_count = 0
     companies = settings.preferred_companies[:15]
     if companies:
         with httpx.Client(timeout=12.0, follow_redirects=True, headers=HEADERS) as client:
@@ -673,9 +803,17 @@ def search_jobs(settings: Settings, queries: list[str] | None = None) -> tuple[l
                 futures = [pool.submit(fetch_company_jobs, client, company) for company in companies]
                 for future in as_completed(futures):
                     try:
-                        jobs.extend(future.result())
+                        found = future.result()
                     except Exception:
                         continue
+                    company_count += len(found)
+                    jobs.extend(found)
+    report.append(_source_row("Company Careers", company_count, None if company_count else "empty"))
     unique = dedupe_jobs(jobs)
     unique.sort(key=lambda job: job.posted_at.timestamp() if job.posted_at else 0, reverse=True)
-    return unique, warnings
+    return unique, warnings, report
+
+
+def search_jobs(settings: Settings, queries: list[str] | None = None) -> tuple[list[Job], list[str]]:
+    jobs, warnings, _report = search_all_sources(settings, queries)
+    return jobs, warnings

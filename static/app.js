@@ -35,6 +35,8 @@ if (root) {
     document.getElementById("status-line").textContent = data.status_line || "";
     document.getElementById("search-status").textContent = data.search_status || "stopped";
     document.getElementById("found").textContent = data.found;
+    const rejected = document.getElementById("rejected");
+    if (rejected) rejected.textContent = data.rejected || 0;
     const queueNode = document.getElementById("queue-size");
     if (queueNode) queueNode.textContent = data.queue_size || 0;
     document.getElementById("qualified").textContent = data.qualified || 0;
@@ -43,6 +45,14 @@ if (root) {
     document.getElementById("submitted").textContent = data.submitted;
     document.getElementById("skipped").textContent = data.skipped || 0;
     document.getElementById("failed").textContent = data.failed;
+    const analyzed = document.getElementById("analyzed");
+    if (analyzed) analyzed.textContent = data.analyzed || 0;
+    const active = document.getElementById("active");
+    if (active) active.textContent = data.active || 0;
+    const duplicates = document.getElementById("duplicates");
+    if (duplicates) duplicates.textContent = data.duplicates || 0;
+    const finalCount = document.getElementById("final-count");
+    if (finalCount) finalCount.textContent = data.final_count || 0;
     const current = data.current;
     const currentNode = document.getElementById("current");
     if (currentNode && !(document.activeElement && currentNode.contains(document.activeElement))) {
@@ -84,6 +94,30 @@ if (root) {
           <form method="post" action="/attention/${esc(row.id)}/dismiss"><input type="hidden" name="csrf" value="${esc(csrf)}"><button class="secondary" type="submit">Don't apply</button></form>
         </div></article>`;
     }).join("")}` : "");
+
+    const sourceNode = document.getElementById("sources");
+    const sourceRows = data.source_report || [];
+    if (sourceNode) {
+      setHtml("sources", sourceRows.length
+        ? `<h2>Sources searched</h2><ul>${sourceRows.map((row) => `<li>${esc(row.name)}: ${row.status === "ok" ? `${esc(row.count)} listings` : row.status === "unavailable" ? "Unavailable / not accessible" : "No public listings"}</li>`).join("")}</ul>`
+        : "");
+    }
+    const oppNode = document.getElementById("opportunities");
+    const cards = data.opportunities || [];
+    if (oppNode && !oppNode.querySelector("input:checked") && !(document.activeElement && oppNode.contains(document.activeElement))) {
+      const body = cards.map((card) => {
+        const official = card.official_verified && safeUrl(card.official_url);
+        const listing = safeUrl(card.url);
+        const link = official
+          ? `<p><a href="${official}" rel="noopener noreferrer">Open official application</a></p>`
+          : `<p>Official application link could not be verified.${listing ? ` <a href="${listing}" rel="noopener noreferrer">Open listing</a>` : ""}</p>`;
+        const why = (card.why || []).map((item) => `✓ ${esc(item)}`).join(" ");
+        return `<article class="note"><h3>${esc(card.role)}</h3><p>Company: ${esc(card.company)}</p><p>Match: ${esc(card.match_score)}%</p><p>Source: ${esc((card.sources || []).join(" + "))}</p><p>Location: ${esc(card.location || "Not stated")}</p><p>Work mode: ${esc(card.work_mode)}</p><p>Stipend: ${esc(card.compensation)}</p><p>Posted: ${esc(card.posted || "date not listed")}</p><p>Availability: ${esc(card.availability)}</p>${why ? `<p>Why it matches: ${why}</p>` : ""}<p>Application: ${esc(card.application)}</p>${link}<label class="check"><input type="checkbox" name="job_id" value="${esc(card.id)}"> Select</label> <button type="submit" name="apply_one" value="${esc(card.id)}">Apply directly</button></article>`;
+      }).join("");
+      setHtml("opportunities", cards.length
+        ? `<h2>Opportunities</h2><form method="post" action="/opportunities/apply"><input type="hidden" name="csrf" value="${esc(csrf)}">${body}<button type="submit">Apply to selected</button></form>`
+        : "");
+    }
 
     const rows = data.applications || [];
     const body = rows.length

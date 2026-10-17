@@ -1,8 +1,8 @@
-"""Continuous search. Qualified jobs are applied one at a time.
+"""Search lists ranked opportunities. Applications start only from the apply queue.
 
-Automatic mode submits a form when every required field can be filled from the
-profile. Review mode leaves the form open for Submit. A blocked application is
-recorded and the next qualified job starts.
+Apply directly and Apply to selected put jobs on that queue. A complete form is
+then submitted. Review mode leaves the form open for Submit. A blocked
+application is recorded and the next selected job starts.
 """
 
 from __future__ import annotations
@@ -17,11 +17,12 @@ from pathlib import Path
 from jobagent.apply import ApplicationSession, default_headless
 from jobagent.criteria import compensation_label, infer_workplace
 from jobagent.filters import screen
+from jobagent.intelligence import analyze_job_market, polite_fetcher
 from jobagent.logsetup import configure, safe_error
 from jobagent.models import ApplyResult, Job
 from jobagent.paths import atomic_write, file_lock, read_json
 from jobagent.profile import load_profile
-from jobagent.search import search_jobs, search_queries
+from jobagent.search import search_all_sources, search_queries
 from jobagent.secrets import load_secrets
 from jobagent.settings import load_settings
 from jobagent.store import Store
@@ -46,7 +47,13 @@ def default_state() -> dict:
         "submitted": 0,
         "skipped": 0,
         "failed": 0,
-        "status_line": "Stopped. Qualified jobs are submitted automatically unless review mode is on.",
+        "status_line": "Stopped. Search lists opportunities. Nothing is submitted until you click Apply directly.",
+        "opportunities": [],
+        "source_report": [],
+        "analyzed": 0,
+        "active": 0,
+        "duplicates": 0,
+        "final_count": 0,
         "warnings": [],
         "failures": [],
         "rejection_counts": {},
@@ -106,6 +113,8 @@ def make_record(job: Job, score: int, result: ApplyResult) -> dict:
         "result": result.result,
         "reason": result.reason,
         "source": job.source,
+        "job_url": safe_http_url(job.url),
+        "application_url": url,
         "submit_clicked": result.submit_clicked,
         "blocks_retry": result.blocks_retry,
         "screenshot": result.screenshot,
@@ -168,6 +177,33 @@ def open_application(job, profile, secrets, home, otp_reader, headless, screensh
     return holder.open_and_fill(job, profile, secrets, home, otp_reader, headless, screenshot_path, preview=preview)
 
 
+def _keep_found(store: Store, record: dict) -> None:
+    for row in store.records():
+        if row.get("id") == record.get("id") and row.get("found_at"):
+            record["found_at"] = row["found_at"]
+            if row.get("sources") and not record.get("sources"):
+                record["sources"] = list(row["sources"])
+            return
+
+
+def job_from_opportunity(card: dict) -> Job:
+    url = card.get("url") or card.get("source_url") or ""
+    workplace = card.get("work_mode") or "unknown"
+    return Job(
+        source=str(card.get("source") or "queue"),
+        company=str(card.get("company") or ""),
+        title=str(card.get("role") or ""),
+        url=str(card.get("source_url") or url),
+        apply_url=url,
+        location=str(card.get("location") or ""),
+        description=str(card.get("description") or ""),
+        workplace=workplace,
+        remote=True if workplace == "remote" else None,
+        official_application_url=str(card.get("official_url") or ""),
+        official_application_verified=bool(card.get("official_verified")),
+    )
+
+
 def job_from_record(record: dict) -> Job:
     url = record.get("url") or ""
     return Job(
@@ -179,6 +215,10 @@ def job_from_record(record: dict) -> Job:
         location=str(record.get("location") or ""),
         workplace=str(record.get("remote") or "unknown"),
     )
+
+
+def search_jobs(settings, queries=None):
+    return search_all_sources(settings, queries)
 
 
 def load_queued(home: Path) -> list[tuple[Job, int]]:
@@ -232,65 +272,47 @@ def run_cycle(
         job, score = queue.pop(0)
         _fill(home, job, score, profile, session, numbers, reasons, failures, [], queue, stop)
         return
-    write_state(
-        home,
-        search_status="running",
-        status_line="Searching public listings.",
-        queue_size=len(queue),
-        **{key: numbers[key] for key in ("found", "rejected", "qualified", "needs_review", "filled", "submitted", "skipped", "failed")},
-    )
+    write_state(home, search_status="running", status_line="Searching public sources. Listings are not submitted.", queue_size=len(queue))
     try:
-        jobs, warnings = search_jobs(settings, next_queries(settings, cursor))
+        report = analyze_job_market(profile, settings, search=search_jobs, fetcher=polite_fetcher)
     except Exception as exc:
         logger.error("search error: %s", safe_error(exc))
-        write_state(home, status_line="Search failed before any application was opened.", warnings=["Search"])
+        write_state(home, status_line="Search failed before any listing was analyzed.", warnings=["Search"])
         return
     if stop.is_set():
-        write_state(home, status_line="Stopped.", warnings=warnings)
+        write_state(home, status_line="Stopped.", warnings=report.get("warnings") or [])
         return
     store = Store(home)
-    opened = False
-    for job in jobs:
-        if stop.is_set():
-            break
+    for card in report["opportunities"]:
+        job = job_from_opportunity(card)
         if store.blocks(job):
             continue
-        numbers["found"] += 1
-        decision = screen(job, settings, profile, store.blocks)
-        if not decision.accept:
-            numbers["rejected"] += 1
-            reasons[decision.reason] += 1
-            logger.info("skip %s | %s | %s | %s", job.source, job.company, job.title, decision.reason)
-            store.upsert(make_record(job, decision.score, ApplyResult("rejected", "", decision.reason, True, False)))
-            continue
-        numbers["qualified"] += 1
-        logger.info("qualify %s | %s | score %s | pay %s | queued", job.company, job.title, decision.score, compensation_label(job))
-        store.upsert(make_record(job, decision.score, ApplyResult("queued", "Waiting to apply.", "", True, False)))
-        if opened or session.is_open():
-            queue.append((job, decision.score))
-            continue
-        opened = True
-        _fill(home, job, decision.score, profile, session, numbers, reasons, failures, warnings, queue, stop)
-    if not session.is_open():
-        write_state(
-            home,
-            search_status="running",
-            status_line="Searching public listings." if not opened else load_state(home).get("status_line") or "Searching public listings.",
-            **_counts(
-                numbers["found"], numbers["rejected"], numbers["qualified"], numbers["needs_review"],
-                numbers["filled"], numbers["submitted"], numbers["skipped"], numbers["failed"],
-                reasons, failures, warnings, queue,
-            ),
-        )
-    else:
-        write_state(
-            home,
-            **_counts(
-                numbers["found"], numbers["rejected"], numbers["qualified"], numbers["needs_review"],
-                numbers["filled"], numbers["submitted"], numbers["skipped"], numbers["failed"],
-                reasons, failures, warnings, queue,
-            ),
-        )
+        record = make_record(job, card["match_score"], ApplyResult("qualified", "Ready to review. Nothing was submitted.", "", False, False))
+        record["id"] = card["id"]
+        record["sources"] = list(card.get("sources") or [])
+        _keep_found(store, record)
+        store.upsert(record)
+        logger.info("opportunity %s | %s | score %s | %s", job.company, job.title, card["match_score"], card["availability"])
+    numbers["found"] = report["found"]
+    numbers["rejected"] = report["rejected"]
+    numbers["qualified"] = report["final_count"]
+    reasons = Counter(report["rejection_counts"])
+    write_state(
+        home,
+        search_status="ready",
+        status_line=f"{report['final_count']} opportunities ready. Nothing is submitted until you click Apply directly.",
+        opportunities=report["opportunities"],
+        source_report=report["source_report"],
+        analyzed=report["analyzed"],
+        active=report["active"],
+        duplicates=report["duplicates"],
+        final_count=report["final_count"],
+        **_counts(
+            numbers["found"], numbers["rejected"], numbers["qualified"], numbers["needs_review"],
+            numbers["filled"], numbers["submitted"], numbers["skipped"], numbers["failed"],
+            reasons, failures, report["warnings"], queue,
+        ),
+    )
 
 
 def _otp(home: Path, started):
@@ -327,6 +349,7 @@ def _fill(home, job, score, profile, session, numbers, reasons, failures, warnin
     preview = make_record(job, score, ApplyResult("applying", "Opening the application.", "", True, False))
     resume = Path(profile.cv_path).name if profile.cv_path else ""
     preview["resume"] = resume
+    _keep_found(store, preview)
     store.upsert(preview)
     shot = home / "reviews" / f"{preview['id']}.png"
     started = datetime.now(timezone.utc)
@@ -355,6 +378,7 @@ def _fill(home, job, score, profile, session, numbers, reasons, failures, warnin
     record = make_record(job, score, result)
     record["id"] = preview["id"]
     record["resume"] = resume
+    _keep_found(store, record)
     if result.status == "submitted":
         record["submitted_at"] = datetime.now(timezone.utc).isoformat()
     store.upsert(record)
@@ -387,6 +411,7 @@ def _fill(home, job, score, profile, session, numbers, reasons, failures, warnin
         record = make_record(job, score, result)
         record["id"] = preview["id"]
         record["resume"] = resume
+        _keep_found(store, record)
         store.upsert(record)
     _log_attempt(job, result, resume)
     if result.status == "submitted":
@@ -427,6 +452,7 @@ class AgentService:
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self.session = ApplicationSession()
+        self._apply_only = False
         self.queue: list = []
         self.cursor = [0]
         self.totals = {
@@ -450,12 +476,11 @@ class AgentService:
             self.stop.clear()
             self.wake.clear()
             self.action.clear()
+            self._apply_only = False
             self.queue.clear()
-            self.queue.extend(load_queued(self.home))
             self.cursor[0] = 0
             for key in self.totals:
                 self.totals[key] = 0
-            self.totals["qualified"] = len(self.queue)
             self._thread = threading.Thread(target=self._loop, name="job-agent", daemon=True)
             self._thread.start()
 
@@ -463,6 +488,18 @@ class AgentService:
         self.stop.set()
         self.wake.set()
         self.action.set()
+
+    def request_apply(self, items: list[tuple]) -> None:
+        with self._lock:
+            self.queue.extend(items)
+            self.wake.set()
+            if self.running():
+                return
+            self._apply_only = True
+            self.stop.clear()
+            self.action.clear()
+            self._thread = threading.Thread(target=self._loop, name="job-agent", daemon=True)
+            self._thread.start()
 
     def request_cycle(self) -> None:
         self.wake.set()
@@ -546,6 +583,7 @@ class AgentService:
     def _loop(self) -> None:
         configure(self.home)
         write_state(self.home, running=True, search_status="running", status_line="Searching public listings.", current=None)
+        analyzed = getattr(self, "_apply_only", False)
         try:
             while not self.stop.is_set():
                 if self.session.is_open():
@@ -555,21 +593,26 @@ class AgentService:
                             break
                         self._resolve(choice, answers)
                         continue
+                    self.wake.wait(0.8)
+                    continue
+                if self.queue:
                     try:
                         run_cycle(self.home, self.stop, self.session, self.queue, self.cursor, self.totals)
                     except Exception as exc:
-                        logger.error("search error: %s", safe_error(exc))
+                        logger.error("apply error: %s", safe_error(exc))
                     continue
-                try:
-                    run_cycle(self.home, self.stop, self.session, self.queue, self.cursor, self.totals)
-                except Exception as exc:
-                    logger.error("cycle error: %s", safe_error(exc))
-                    write_state(self.home, running=True, search_status="running", status_line="The last search hit an error. Searching again.")
-                if self.stop.is_set():
+                if not analyzed:
+                    try:
+                        run_cycle(self.home, self.stop, self.session, self.queue, self.cursor, self.totals)
+                    except Exception as exc:
+                        logger.error("cycle error: %s", safe_error(exc))
+                        write_state(self.home, running=True, search_status="running", status_line="The last search hit an error.")
+                    analyzed = True
+                    continue
+                if getattr(self, "_apply_only", False):
                     break
-                if not self.session.is_open() and not self.queue:
-                    self.wake.wait(1.5)
-                    self.wake.clear()
+                self.wake.wait(1.5)
+                self.wake.clear()
         finally:
             self.session.close()
             write_state(self.home, running=False, search_status="stopped", status_line="Stopped.", current=None)
