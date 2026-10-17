@@ -114,6 +114,14 @@ button.secondary:hover { background: #efeae0; }
 
 .actions form { margin: 0; }
 
+a.button-link {
+  display: inline-block;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-decoration: none;
+}
+
 .banner {
   background: var(--warn-bg);
   color: var(--warn);

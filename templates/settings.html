@@ -16,6 +16,8 @@
   <label for="location">Location</label>
   <input id="location" name="location" value="{{ settings.location }}">
   <p class="hint">Use the full place name. Remote listings must allow this place when they state a restriction.</p>
+  <label class="check" for="allow_hybrid"><input id="allow_hybrid" name="allow_hybrid" type="checkbox" {% if settings.allow_hybrid %}checked{% endif %}> Allow hybrid</label>
+  <p class="hint">Hybrid roles are skipped unless this is checked. On-site roles are skipped when Remote is selected. Missing pay is kept and marked unknown. Unpaid roles are skipped.</p>
   <label for="workplace">Remote/onsite</label>
   <select id="workplace" name="workplace">
     {% for value, label in [("any", "Any"), ("remote", "Remote"), ("onsite", "Onsite"), ("hybrid", "Hybrid")] %}

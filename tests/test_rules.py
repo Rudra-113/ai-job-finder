@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from jobagent.criteria import sector_matches
+from jobagent.criteria import compensation_label, sector_matches
 from jobagent.filters import screen
 from jobagent.matcher import score_job
 from jobagent.safety import mentions_fee
@@ -73,7 +73,9 @@ def test_unpaid_fee_low_pay_and_unknown_pay(tmp_path, now):
     low = strong_job(salary_min=100, salary_text="100 per month", description="Remote data internship using Python and SQL. Stipend 100 per month.")
     assert screen(low, settings, profile, already, now).reason == "Pay is below your minimum"
     unknown = strong_job(salary_min=None, salary_period="", salary_text="", description="Remote data internship using Python and SQL.")
-    assert screen(unknown, settings, profile, already, now).reason == "Pay is not stated, so it cannot be checked against your minimum"
+    kept = screen(unknown, settings, profile, already, now)
+    assert kept.accept
+    assert compensation_label(unknown) == "unknown"
     allowed = screen(unknown, strong_settings(minimum_stipend=0), profile, already, now)
     assert allowed.accept
 
@@ -84,7 +86,9 @@ def test_excluded_duplicate_old_and_missing_skill(tmp_path, now):
     assert screen(strong_job(), strong_settings(excluded_companies=["Northwind"]), profile, already, now).reason == "Excluded company"
     assert screen(strong_job(), strong_settings(), profile, lambda _job: True, now).reason == "Already processed"
     old = strong_job(posted_at=NOW - timedelta(days=40))
-    assert screen(old, strong_settings(), profile, already, now).reason == "Older than 30 days"
+    assert screen(old, strong_settings(), profile, already, now).accept
+    closed = strong_job(description=strong_job().description + " This position has been filled.")
+    assert screen(closed, strong_settings(), profile, already, now).reason == "Listing is closed"
     missing = strong_job()
     assert screen(missing, strong_settings(required_skills=["Kubernetes"]), profile, already, now).reason == "Does not list a required skill"
 
@@ -106,6 +110,52 @@ def test_weak_title_match_stays_below_the_default_score(tmp_path, now):
     decision = screen(job, strong_settings(), strong_profile(tmp_path), lambda _job: False, now)
     assert decision.reason == "Match score below your minimum"
     assert 30 <= decision.score <= 55
+
+
+def test_related_title_and_unknown_workplace_stay_in_play(tmp_path, now):
+    profile = strong_profile(tmp_path)
+    profile.skills = ["Python", "Linux", "networking"]
+    profile.cv_text = "Python Linux networking security internship projects."
+    job = strong_job(
+        title="Security Engineering Intern",
+        category="Cybersecurity",
+        tags=["security"],
+        location="India",
+        workplace="unknown",
+        remote=None,
+        salary_min=None,
+        salary_period="",
+        salary_text="",
+        description="Remote-friendly cybersecurity internship in India using Python, Linux, and networking. Pay is not listed.",
+    )
+    settings = strong_settings(
+        sectors=["cybersecurity"],
+        roles=["cybersecurity intern"],
+        minimum_stipend=5000,
+        location="India",
+        workplace="remote",
+    )
+    decision = screen(job, settings, profile, lambda _item: False, now)
+    assert decision.accept
+    assert decision.score >= 70
+    hybrid = strong_job(
+        workplace="hybrid",
+        remote=False,
+        location="Bengaluru, India",
+        salary_min=6000,
+        salary_text="6000 per month",
+        description="Hybrid cybersecurity internship using Python and Linux. Stipend 6000 per month.",
+    )
+    assert "Hybrid" in screen(hybrid, settings, profile, lambda _item: False, now).reason
+    onsite = strong_job(
+        workplace="onsite",
+        remote=False,
+        location="Mumbai, India",
+        salary_min=6000,
+        salary_text="6000 per month",
+        description="Onsite cybersecurity internship using Python and Linux. Stipend 6000 per month.",
+    )
+    assert "On-site" in screen(onsite, settings, profile, lambda _item: False, now).reason
 
 
 def test_workplace_and_location_rules(tmp_path, now):

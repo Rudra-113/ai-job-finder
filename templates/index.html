@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block body %}
 <h1>Search</h1>
-<p class="hint">Each pass submits at most 5 applications, then waits 30 minutes. Listings older than 30 days are skipped. Other rules are on Settings. Your CV is on Profile.</p>
+<p class="hint">Search keeps running until you press Stop. A matching form is filled and left open. Nothing is submitted until you click Submit.</p>
 <p id="status-line" role="status">{{ status_line }}</p>
+<p>Search status: <strong id="search-status">{{ search_status }}</strong></p>
 
 <form id="start-form" class="stack" method="post" action="{{ url_for('start') }}" {% if running %}hidden{% endif %}>
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -15,7 +16,7 @@
   <p class="hint">Monthly amount. Use 0 to allow listings that do not state pay. Unpaid listings are always skipped. Currency is not converted.</p>
   <label for="minimum_score">Minimum match score</label>
   <input id="minimum_score" name="minimum_score" type="number" min="0" max="100" step="1" value="{{ settings.minimum_score }}" required>
-  <button type="submit">Start search</button>
+  <button type="submit">Start continuous search</button>
 </form>
 
 <form id="stop-form" method="post" action="{{ url_for('stop') }}" {% if not running %}hidden{% endif %}>
@@ -24,11 +25,48 @@
 </form>
 
 <dl class="counts">
-  <dt>Jobs found</dt><dd id="found">{{ found }}</dd>
-  <dt>Jobs rejected</dt><dd id="rejected">{{ rejected }}</dd>
-  <dt>Applications submitted</dt><dd id="submitted">{{ submitted }}</dd>
-  <dt>Applications failed</dt><dd id="failed">{{ failed }}</dd>
+  <dt>Found</dt><dd id="found">{{ found }}</dd>
+  <dt>Qualified</dt><dd id="qualified">{{ qualified }}</dd>
+  <dt>Needs review</dt><dd id="needs-review">{{ needs_review }}</dd>
+  <dt>Filled</dt><dd id="filled">{{ filled }}</dd>
+  <dt>Submitted</dt><dd id="submitted">{{ submitted }}</dd>
+  <dt>Skipped</dt><dd id="skipped">{{ skipped }}</dd>
+  <dt>Failed</dt><dd id="failed">{{ failed }}</dd>
 </dl>
+
+<section id="current">
+  {% if current %}
+  <h2>Current application</h2>
+  <article class="note">
+    <p><strong>{{ current.company }}</strong> — {{ current.role }}</p>
+    <p>Match score {{ current.match_score }} · Pay {{ current.compensation }} · {{ current.location }} · Posted {{ current.posted or "date not listed" }}</p>
+    {% if current.url %}<p><a href="{{ current.url }}" rel="noopener noreferrer">{{ current.url }}</a></p>{% endif %}
+    {% if current.filled %}<p>Fields filled: {{ current.filled | join("; ") }}</p>{% endif %}
+    {% if current.answered %}<p>Questions answered: {{ current.answered | join("; ") }}</p>{% endif %}
+    {% if current.needs_input %}<p>Needs your input: {{ current.needs_input | join("; ") }}</p>{% endif %}
+  </article>
+  {% endif %}
+</section>
+
+<div class="actions" id="review-actions">
+  <form method="post" action="{{ url_for('submit_application') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit">Submit</button>
+  </form>
+  <form method="post" action="{{ url_for('skip_application') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="secondary" type="submit">Skip</button>
+  </form>
+  {% if current and current.url %}
+  <a class="button-link" href="{{ current.url }}" rel="noopener noreferrer">Open application</a>
+  {% endif %}
+</div>
+<form id="edit-form" class="stack" method="post" action="{{ url_for('edit_application') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="edit-notes">Edit / Continue</label>
+  <textarea id="edit-notes" name="notes" placeholder="One line per blank: Question: your true answer"></textarea>
+  <button class="secondary" type="submit">Edit / Continue</button>
+</form>
 
 <div id="reasons">
   {% if rejection_counts %}

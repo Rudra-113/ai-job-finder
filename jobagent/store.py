@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jobagent.models import Job
 from jobagent.paths import atomic_write, file_lock, read_json
-from jobagent.textutil import canonical_url, job_identity
+from jobagent.textutil import canonical_url, duplicate_key, job_identity
 
 
 class Store:
@@ -40,6 +40,7 @@ class Store:
     def blocks(self, job: Job) -> bool:
         keys = {key for key in (canonical_url(job.url), canonical_url(job.apply_url)) if key}
         identity = job_identity(job)
+        title_key = duplicate_key(job)
         for record in self.records():
             if not record.get("blocks_retry"):
                 continue
@@ -50,6 +51,8 @@ class Store:
             if keys & recorded:
                 return True
             if identity and record.get("identity") == identity:
+                return True
+            if title_key and record.get("title_key") == title_key:
                 return True
         return False
 

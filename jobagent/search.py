@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import quote_plus
+from html import unescape
+from urllib.parse import quote_plus, urlsplit
 
 import httpx
 
@@ -35,14 +39,76 @@ SOURCE_RANK = {
     "remoteok": 6,
     "arbeitnow": 7,
     "themuse": 8,
+    "linkedin": 9,
+    "internshala": 9,
 }
+SECURITY_QUERIES = (
+    "cybersecurity intern",
+    "cyber security intern",
+    "security intern",
+    "SOC intern",
+    "SOC analyst intern",
+    "VAPT intern",
+    "penetration testing intern",
+    "security research intern",
+    "application security intern",
+    "network security intern",
+    "information security intern",
+    "threat intelligence intern",
+    "cloud security intern",
+    "AI security intern",
+    "cybersecurity research intern",
+    "Python security intern",
+    "security engineering intern",
+    "vulnerability assessment intern",
+    "ethical hacking intern",
+    "cyber defense intern",
+    "security analyst intern",
+)
+_HOST_GAP = 0.6
+_last_hit: dict[str, float] = {}
 _OFFICIAL = ("greenhouse.io", "lever.co", "ashbyhq.com")
 
 
-def _get_json(client: httpx.Client, url: str):
+def search_queries(settings: Settings) -> list[str]:
+    """User roles, remote/India variants, and the security intern phrases."""
+    raw: list[str] = []
+    for role in settings.roles:
+        text = role.strip()
+        if not text:
+            continue
+        raw.append(text)
+        raw.append(f"{text} remote")
+        raw.append(f"{text} India")
+    raw.extend(SECURITY_QUERIES)
+    seen: set[str] = set()
+    queries: list[str] = []
+    for item in raw:
+        key = item.casefold().strip()
+        if key and key not in seen:
+            seen.add(key)
+            queries.append(item.strip())
+    return queries
+
+
+def _polite(client: httpx.Client, url: str):
+    host = urlsplit(url).netloc.casefold()
+    last = _last_hit.get(host, 0)
+    gap = _HOST_GAP - (time.time() - last)
+    if gap > 0:
+        time.sleep(gap)
     try:
         response = client.get(url)
     except httpx.HTTPError:
+        _last_hit[host] = time.time()
+        return None
+    _last_hit[host] = time.time()
+    return response
+
+
+def _get_json(client: httpx.Client, url: str):
+    response = _polite(client, url)
+    if response is None:
         return None, "unavailable"
     if response.status_code == 404:
         return None, None
@@ -330,13 +396,8 @@ def _newest(jobs: list[Job], limit: int) -> list[Job]:
     return jobs[:limit]
 
 
-def fetch_remotive(client: httpx.Client, settings: Settings) -> tuple[list[Job], str | None]:
-    queries: list[str] = []
-    for role in settings.roles[:3]:
-        queries.append(role)
-    if settings.sectors:
-        queries.append(settings.sectors[0])
-    unique = list(dict.fromkeys(queries))[:4] or [""]
+def fetch_remotive(client: httpx.Client, _settings: Settings, queries: list[str] | None = None) -> tuple[list[Job], str | None]:
+    unique = list(dict.fromkeys(queries or [""]))[:4]
     found: list[Job] = []
     error = None
     for query in unique:
@@ -364,8 +425,9 @@ def fetch_arbeitnow(client: httpx.Client, _settings: Settings) -> tuple[list[Job
     return _newest(parse_arbeitnow(payload), 100), None
 
 
-def fetch_muse(client: httpx.Client, _settings: Settings) -> tuple[list[Job], str | None]:
-    payload, err = _get_json(client, "https://www.themuse.com/api/public/jobs?page=1")
+def fetch_muse(client: httpx.Client, _settings: Settings, queries: list[str] | None = None) -> tuple[list[Job], str | None]:
+    page = 1 + (abs(hash(tuple(queries or []))) % 5)
+    payload, err = _get_json(client, f"https://www.themuse.com/api/public/jobs?page={page}")
     if err or not isinstance(payload, dict):
         return [], err or "unavailable"
     return parse_muse(payload), None
@@ -378,11 +440,18 @@ def fetch_jobicy(client: httpx.Client, _settings: Settings) -> tuple[list[Job], 
     return parse_jobicy(payload), None
 
 
-def fetch_himalayas(client: httpx.Client, _settings: Settings) -> tuple[list[Job], str | None]:
-    payload, err = _get_json(client, "https://himalayas.app/jobs/api?limit=50")
-    if err or not isinstance(payload, dict):
-        return [], err or "unavailable"
-    return parse_himalayas(payload), None
+def fetch_himalayas(client: httpx.Client, _settings: Settings, queries: list[str] | None = None) -> tuple[list[Job], str | None]:
+    found: list[Job] = []
+    error = None
+    for query in (queries or [""])[:3]:
+        url = "https://himalayas.app/jobs/api?limit=20&q=" + quote_plus(query)
+        payload, err = _get_json(client, url)
+        if err:
+            error = err
+            continue
+        if isinstance(payload, dict):
+            found.extend(parse_himalayas(payload))
+    return _newest(found, 60), error if not found else None
 
 
 def fetch_company_jobs(client: httpx.Client, company: str) -> list[Job]:
@@ -410,6 +479,131 @@ def _prefer_official(job: Job) -> None:
         job.apply_url = official
 
 
+def parse_linkedin_guest(html: str) -> list[Job]:
+    jobs: list[Job] = []
+    chunks = re.split(r'data-entity-urn="urn:li:jobPosting:', html or "")
+    for chunk in chunks[1:]:
+        link = re.search(r'href="(https://[^"]+/jobs/view/[^"?]+)', chunk)
+        title = re.search(r'class="sr-only">\s*([^<]+?)\s*</span>', chunk, re.S)
+        company = re.search(r'base-search-card__subtitle[\s\S]{0,400}?>([^<]+)</', chunk)
+        if not link or not title:
+            continue
+        place = re.search(r'job-search-card__location[\s\S]{0,200}?>([^<]+)<', chunk)
+        location = unescape(place.group(1)).strip() if place else "India"
+        name = unescape(company.group(1)).strip() if company else ""
+        if not name:
+            slug = link.group(1).rstrip("/").split("/")[-1]
+            at = re.search(r"-at-(.+)-(\d+)$", slug)
+            name = at.group(1).replace("-", " ") if at else ""
+        job = _job(
+            "linkedin",
+            name,
+            unescape(title.group(1)).strip(),
+            unescape(link.group(1)),
+            location=location,
+            description=unescape(title.group(1)).strip(),
+            workplace="unknown",
+        )
+        if job:
+            jobs.append(job)
+    return jobs
+
+
+def parse_internshala(html: str) -> list[Job]:
+    jobs: list[Job] = []
+    for block in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html or "", re.S):
+        try:
+            data = json.loads(block)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict) or data.get("@type") != "ItemList":
+            continue
+        for item in data.get("itemListElement") or []:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            url = str(item.get("url") or "").strip()
+            title = re.sub(r"\s*-\s*Internship.*$", "", name, flags=re.I).strip() or name
+            remote = bool(re.search(r"wfh|work from home|remote", name, re.I))
+            company = ""
+            slug = url.rstrip("/").split("/")[-1]
+            match = re.search(r"-at-([a-z0-9-]+?)(\d*)$", slug)
+            if match:
+                company = match.group(1).replace("-", " ").strip()
+            job = _job(
+                "internshala",
+                company or "Internshala listing",
+                title,
+                url,
+                location="India",
+                description=name,
+                workplace="remote" if remote else "unknown",
+                remote=True if remote else None,
+            )
+            if job:
+                jobs.append(job)
+    return jobs
+
+
+def fetch_linkedin(client: httpx.Client, queries: list[str]) -> tuple[list[Job], str | None]:
+    found: list[Job] = []
+    for query in queries[:2]:
+        url = (
+            "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords="
+            + quote_plus(query)
+            + "&location=India&start=0"
+        )
+        response = _polite(client, url)
+        if response is None or response.status_code in {401, 403, 429, 999}:
+            return found, "blocked"
+        if response.status_code != 200:
+            return found, "unavailable"
+        if "authwall" in response.text[:1500].casefold() or "captcha" in response.text[:1500].casefold():
+            return found, "blocked"
+        found.extend(parse_linkedin_guest(response.text))
+    return found, None if found else "no public listings"
+
+
+def fetch_internshala(client: httpx.Client, queries: list[str]) -> tuple[list[Job], str | None]:
+    found: list[Job] = []
+    for query in queries[:2]:
+        slug = re.sub(r"[^a-z0-9]+", "-", query.casefold()).strip("-")
+        response = _polite(client, f"https://internshala.com/internships/keywords-{slug}/")
+        if response is None or response.status_code in {401, 403, 429}:
+            return found, "blocked"
+        if response.status_code != 200:
+            return found, "unavailable"
+        found.extend(parse_internshala(response.text))
+    return found, None if found else "no public listings"
+
+
+def fetch_extra_boards(client: httpx.Client, queries: list[str]) -> tuple[list[Job], list[str]]:
+    """Try public pages. A block or an empty shell is recorded and not bypassed."""
+    warnings: list[str] = []
+    query = quote_plus(queries[0] if queries else "intern")
+    checks = (
+        ("Indeed", f"https://www.indeed.com/jobs?q={query}&l=India&fromage=14"),
+        ("Naukri", f"https://www.naukri.com/{(queries[0] if queries else 'intern').casefold().replace(' ', '-')}-jobs"),
+        ("Foundit", f"https://www.foundit.in/search/{(queries[0] if queries else 'intern').casefold().replace(' ', '-')}-jobs"),
+        ("Cutshort", f"https://cutshort.io/jobs/{(queries[0] if queries else 'intern').casefold().replace(' ', '-')}"),
+        ("Wellfound", f"https://wellfound.com/jobs?q={query}"),
+    )
+    for name, url in checks:
+        response = _polite(client, url)
+        if response is None or response.status_code in {401, 403, 429, 503}:
+            warnings.append(f"{name} blocked public access")
+            continue
+        if response.status_code != 200:
+            warnings.append(f"{name} unavailable")
+            continue
+        text = response.text[:4000].casefold()
+        if "captcha" in text or "access denied" in text:
+            warnings.append(f"{name} blocked public access")
+            continue
+        warnings.append(f"{name} had no public listing feed to read")
+    return [], warnings
+
+
 def dedupe_jobs(jobs: list[Job]) -> list[Job]:
     chosen: dict[str, Job] = {}
     for job in jobs:
@@ -424,9 +618,18 @@ def dedupe_jobs(jobs: list[Job]) -> list[Job]:
     return list(chosen.values())
 
 
-def search_jobs(settings: Settings) -> tuple[list[Job], list[str]]:
+def _run_fetch(fn, settings: Settings, queries: list[str]) -> tuple[list[Job], str | None]:
+    with httpx.Client(timeout=12.0, follow_redirects=True, headers=HEADERS) as client:
+        try:
+            return fn(client, settings, queries)
+        except TypeError:
+            return fn(client, settings)
+
+
+def search_jobs(settings: Settings, queries: list[str] | None = None) -> tuple[list[Job], list[str]]:
     warnings: list[str] = []
     jobs: list[Job] = []
+    chosen = list(queries or search_queries(settings)[:3])
     fetches = (
         ("Remotive", fetch_remotive),
         ("Remote OK", fetch_remoteok),
@@ -435,21 +638,37 @@ def search_jobs(settings: Settings) -> tuple[list[Job], list[str]]:
         ("Jobicy", fetch_jobicy),
         ("Himalayas", fetch_himalayas),
     )
-    with httpx.Client(timeout=12.0, follow_redirects=True, headers=HEADERS) as client:
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            future_map = {pool.submit(fn, client, settings): name for name, fn in fetches}
-            for future in as_completed(future_map):
-                name = future_map[future]
-                try:
-                    batch, error = future.result()
-                except Exception:
-                    warnings.append(name)
-                    continue
-                if error:
-                    warnings.append(name)
-                jobs.extend(batch)
-        companies = settings.preferred_companies[:15]
-        if companies:
+
+    def extra(client: httpx.Client, _settings: Settings, query_list: list[str] | None = None) -> tuple[list[Job], str | None]:
+        query_list = query_list or []
+        linked, linked_note = fetch_linkedin(client, query_list)
+        intern, intern_note = fetch_internshala(client, query_list)
+        _empty, notes = fetch_extra_boards(client, query_list)
+        batch = linked + intern
+        messages = []
+        if linked_note:
+            messages.append(f"LinkedIn {linked_note}")
+        if intern_note:
+            messages.append(f"Internshala {intern_note}")
+        messages.extend(notes)
+        return batch, "; ".join(messages) if messages else None
+
+    workers = [*fetches, ("More boards", extra)]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        future_map = {pool.submit(_run_fetch, fn, settings, chosen): name for name, fn in workers}
+        for future in as_completed(future_map):
+            name = future_map[future]
+            try:
+                batch, error = future.result()
+            except Exception:
+                warnings.append(name)
+                continue
+            if error:
+                warnings.append(f"{name}: {error}" if name == "More boards" else name)
+            jobs.extend(batch)
+    companies = settings.preferred_companies[:15]
+    if companies:
+        with httpx.Client(timeout=12.0, follow_redirects=True, headers=HEADERS) as client:
             with ThreadPoolExecutor(max_workers=4) as pool:
                 futures = [pool.submit(fetch_company_jobs, client, company) for company in companies]
                 for future in as_completed(futures):
@@ -459,4 +678,4 @@ def search_jobs(settings: Settings) -> tuple[list[Job], list[str]]:
                         continue
     unique = dedupe_jobs(jobs)
     unique.sort(key=lambda job: job.posted_at.timestamp() if job.posted_at else 0, reverse=True)
-    return unique[:200], warnings
+    return unique, warnings

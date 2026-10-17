@@ -25,7 +25,14 @@ GLUE = {
     "per", "via", "within", "without", "none", "a", "an",
 }
 
-_EEO = re.compile(r"\b(gender|race|ethnic|hispanic|latino|veteran|disability|pronouns?)\b", re.I)
+_EEO = re.compile(
+    r"\b("
+    r"gender|transgender|race|ethnic\w*|hispanic|latino|latina|latinx|"
+    r"veteran|disability|disabled|pronouns?|"
+    r"sexual orientation|neurodiverg\w*"
+    r")\b",
+    re.I,
+)
 _ACCOMMODATION = re.compile(r"accommodat|adjustment|disability support", re.I)
 
 

@@ -18,6 +18,12 @@ from jobagent.textutil import (
 
 MAX_LISTING_AGE_DAYS = 30
 
+_SECTOR_ALIASES = {
+    "cybersecurity": ("cybersecurity", "cyber security", "information security", "infosec", "application security", "network security"),
+    "cyber": ("cybersecurity", "cyber security", "information security"),
+    "security": ("cybersecurity", "information security", "infosec", "application security", "security engineer"),
+}
+
 _TINY = {"and", "or", "the", "of", "for", "a", "an", "to", "in", "on"}
 _CLOSED = re.compile(
     r"no longer accepting|position has been filled|this (?:job|position|role) has expired|applications? (?:are|is) closed",
@@ -49,6 +55,10 @@ def sector_matches(job: Job, sectors: list[str]) -> bool:
     original = "\n".join([job.title, job.location, job.category, " ".join(job.tags), job.description])
     folded = original.casefold()
     for sector in sectors:
+        phrase = sector.casefold().strip()
+        for alias in _SECTOR_ALIASES.get(phrase, ()):
+            if alias in folded:
+                return True
         terms = _terms(sector)
         if terms and all(term_present(term, folded, original) for term in terms):
             return True
@@ -121,7 +131,7 @@ def infer_workplace(job: Job) -> str:
     blob = f"{job.location} {job.title} {job.employment}".casefold()
     if "hybrid" in blob:
         return "hybrid"
-    if job.remote is True or re.search(r"\bremote\b", blob):
+    if job.remote is True or re.search(r"\bremote\b|\bwork from home\b|\bwfh\b", blob):
         return "remote"
     if job.remote is False:
         return "onsite"
@@ -156,16 +166,21 @@ def restriction_allows(wanted: str, actual: str) -> bool:
 def workplace_problem(job: Job, settings: Settings) -> str | None:
     preference = settings.workplace
     place = infer_workplace(job)
-    if preference == "remote" and place in {"onsite", "unknown"}:
-        return "Not the workplace type you selected"
+    allow_hybrid = bool(getattr(settings, "allow_hybrid", False))
+    if preference == "remote" and place == "onsite":
+        return "On-site role while remote is selected"
+    if preference == "remote" and place == "hybrid" and not allow_hybrid:
+        return "Hybrid is off. Enable hybrid in Settings to include it."
     if preference == "onsite" and place == "remote":
         return "Not the workplace type you selected"
-    if preference == "hybrid" and place != "hybrid":
+    if preference == "hybrid" and place == "onsite":
         return "Not the workplace type you selected"
     wanted = settings.location.strip()
     if not wanted:
         return None
-    if place == "remote" and preference in {"remote", "any", "hybrid"}:
+    if not (job.location or "").strip():
+        return None
+    if place in {"remote", "unknown"} and preference in {"remote", "any", "hybrid"}:
         if restriction_allows(wanted, job.location):
             return None
         return "Location does not match"
@@ -187,20 +202,32 @@ def structured_monthly(job: Job) -> float | None:
     return to_monthly(amount, period, is_full_time(context) or period in {"month", "year"})
 
 
-def stipend_problem(job: Job, minimum: float) -> str | None:
-    text = f"{job.title}\n{job.salary_text}\n{job.description[:4000]}"
-    if is_unpaid(text):
-        return "Unpaid"
-    if minimum <= 0:
-        return None
+def monthly_pay(job: Job) -> float | None:
     monthly = structured_monthly(job)
     if monthly is None:
         monthly = parse_salary_text(job.salary_text, job.employment) or parse_salary_text(
             job.description[:4000], job.employment
         )
-    if monthly is None:
-        return "Pay is not stated, so it cannot be checked against your minimum"
-    if round(monthly, 2) < minimum:
+    return monthly
+
+
+def compensation_label(job: Job) -> str:
+    text = f"{job.title}\n{job.salary_text}\n{job.description[:4000]}"
+    if is_unpaid(text):
+        return "unpaid"
+    if monthly_pay(job) is None:
+        return "unknown"
+    return "stated"
+
+
+def stipend_problem(job: Job, minimum: float) -> str | None:
+    label = compensation_label(job)
+    if label == "unpaid":
+        return "Unpaid"
+    if label == "unknown":
+        return None
+    monthly = monthly_pay(job)
+    if monthly is not None and minimum > 0 and round(monthly, 2) < minimum:
         return "Pay is below your minimum"
     return None
 
@@ -212,8 +239,4 @@ def age_problem(job: Job, now: datetime) -> str | None:
             return "Deadline passed"
     if _CLOSED.search(job.description or ""):
         return "Listing is closed"
-    if job.posted_at is not None:
-        posted = job.posted_at if job.posted_at.tzinfo else job.posted_at.replace(tzinfo=timezone.utc)
-        if now - posted > timedelta(days=MAX_LISTING_AGE_DAYS):
-            return "Older than 30 days"
     return None

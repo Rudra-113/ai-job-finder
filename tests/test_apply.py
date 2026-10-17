@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from jobagent.answers import is_eeo
 from jobagent.apply import complete_application, field_kind, is_otp_field
 from jobagent.models import Job, Secrets
 from jobagent.safety import is_otp_field as otp_from_safety
@@ -165,15 +166,87 @@ def job_for(server) -> Job:
     return Job(source="test", company="Northwind", title="Data Analyst Intern", url=url, apply_url=url, workplace="remote")
 
 
-def run_form(page, form, profile, work_dir, reader):
+def run_form(page, form, profile, work_dir, reader, preview=False):
     server = serve(form)
     try:
         page.goto(job_for(server).url, wait_until="domcontentloaded")
-        result = complete_application(page, job_for(server), profile, Secrets(), reader, work_dir)
+        result = complete_application(page, job_for(server), profile, Secrets(), reader, work_dir, preview=preview)
         return result, list(server.posts)
     finally:
         server.shutdown()
         server.server_close()
+
+
+COMBO = """
+<!DOCTYPE html>
+<html><body>
+<form method="post" action="/submitted">
+  <label for="first_name">First Name *</label>
+  <input id="first_name" name="first_name" required>
+  <label for="last_name">Last Name *</label>
+  <input id="last_name" name="last_name" required>
+  <label for="email">Email *</label>
+  <input id="email" name="email" type="email" required>
+  <label for="country">Country *</label>
+  <input id="country" name="country" role="combobox" aria-controls="country-list" required>
+  <div id="country-list" role="listbox">
+    <div role="option">France +33</div>
+    <div role="option">Germany +49</div>
+  </div>
+  <label for="work">Please confirm your Right to Work *</label>
+  <input id="work" name="work" role="combobox" aria-controls="work-list" required>
+  <div id="work-list" role="listbox">
+    <div role="option">Yes</div>
+    <div role="option">No</div>
+  </div>
+  <label for="gender">How would you describe your gender identity?</label>
+  <input id="gender" name="gender" role="combobox" aria-controls="gender-list">
+  <div id="gender-list" role="listbox">
+    <div role="option">Yes</div>
+    <div role="option">No</div>
+  </div>
+  <label for="trans">Do you identify as transgender?</label>
+  <input id="trans" name="trans" role="combobox" aria-controls="trans-list">
+  <div id="trans-list" role="listbox">
+    <div role="option">Yes</div>
+    <div role="option">No</div>
+  </div>
+  <label for="orient">What's your sexual orientation?</label>
+  <input id="orient" name="orient" role="combobox">
+  <label for="neuro">Are you neurodivergent?</label>
+  <input id="neuro" name="neuro">
+  <label for="said">How do you pronounce your name?</label>
+  <input id="said" name="said">
+  <button type="submit">Submit application</button>
+</form>
+<script>
+document.querySelectorAll("[role=option]").forEach((opt) => {
+  opt.addEventListener("click", () => {
+    const list = opt.closest("[role=listbox]");
+    const input = document.querySelector("[aria-controls='" + list.id + "']");
+    if (input) input.value = opt.textContent.trim();
+  });
+});
+</script>
+</body></html>
+"""
+
+
+def test_demographic_questions_are_not_profile_fields():
+    labels = (
+        "How would you describe your gender identity?",
+        "Do you identify as transgender?",
+        "What's your sexual orientation?",
+        "How would you describe your ethnicity?",
+        "Are you neurodivergent?",
+        "Disability status",
+        "Pronouns",
+    )
+    for label in labels:
+        assert is_eeo(label), label
+        assert field_kind({"label": label, "name": "", "id": "", "type": "text"}) == "eeo"
+    assert not is_eeo("Do you need a disability accommodation?")
+    assert field_kind({"label": "How do you pronounce your name?", "name": "", "id": "", "type": "text"}) == "question"
 
 
 def test_otp_field_detection():
@@ -216,6 +289,48 @@ def test_missing_work_authorization_does_not_submit(browser_page, tmp_path):
     assert posts == []
     assert result.status == "needs_user"
     assert "authorization" in result.reason.lower()
+
+
+def test_preview_fills_without_submitting(browser_page, tmp_path):
+    result, posts = run_form(
+        browser_page,
+        FORM,
+        strong_profile(tmp_path),
+        tmp_path,
+        lambda _domains: None,
+        preview=True,
+    )
+    assert result.status == "filled", result.reason
+    assert result.submit_clicked is False
+    assert posts == []
+    assert any("ada@example.com" in item for item in result.filled)
+
+
+def test_combobox_yes_does_not_fill_demographic_fields(browser_page, tmp_path):
+    result, posts = run_form(
+        browser_page,
+        COMBO,
+        strong_profile(tmp_path),
+        tmp_path,
+        lambda _domains: None,
+        preview=True,
+    )
+    assert result.status == "filled", result.reason
+    assert result.submit_clicked is False
+    assert posts == []
+    page = browser_page
+    assert page.locator("#gender").input_value() == ""
+    assert page.locator("#trans").input_value() == ""
+    assert page.locator("#orient").input_value() == ""
+    assert page.locator("#neuro").input_value() == ""
+    assert page.locator("#work").input_value().casefold() == "yes"
+    assert page.locator("#country").input_value() == "Germany +49"
+    assert page.locator("#said").input_value() == ""
+    blob = " ".join(result.filled + result.answered).casefold()
+    assert "gender" not in blob
+    assert "transgender" not in blob
+    assert "orientation" not in blob
+    assert "neurodivergent" not in blob
 
 
 def test_email_otp_is_entered(browser_page, tmp_path):

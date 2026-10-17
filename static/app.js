@@ -33,10 +33,26 @@ if (root) {
 
   function render(data) {
     document.getElementById("status-line").textContent = data.status_line || "";
+    document.getElementById("search-status").textContent = data.search_status || "stopped";
     document.getElementById("found").textContent = data.found;
-    document.getElementById("rejected").textContent = data.rejected;
+    document.getElementById("qualified").textContent = data.qualified || 0;
+    document.getElementById("needs-review").textContent = data.needs_review || 0;
+    document.getElementById("filled").textContent = data.filled || 0;
     document.getElementById("submitted").textContent = data.submitted;
+    document.getElementById("skipped").textContent = data.skipped || 0;
     document.getElementById("failed").textContent = data.failed;
+    const current = data.current;
+    const currentNode = document.getElementById("current");
+    if (currentNode && !(document.activeElement && currentNode.contains(document.activeElement))) {
+      if (!current) {
+        setHtml("current", "");
+      } else {
+        const href = safeUrl(current.url);
+        const link = href ? `<p><a href="${href}" rel="noopener noreferrer">${href}</a></p>` : "";
+        const lines = (items, title) => items && items.length ? `<p>${title}: ${items.map(esc).join("; ")}</p>` : "";
+        setHtml("current", `<h2>Current application</h2><article class="note"><p><strong>${esc(current.company)}</strong> — ${esc(current.role)}</p><p>Match score ${esc(current.match_score)} · Pay ${esc(current.compensation)} · ${esc(current.location)} · Posted ${esc(current.posted || "date not listed")}</p>${link}${lines(current.filled, "Fields filled")}${lines(current.answered, "Questions answered")}${lines(current.needs_input, "Needs your input")}</article>`);
+      }
+    }
     document.getElementById("start-form").hidden = !!data.running;
     document.getElementById("stop-form").hidden = !data.running;
 

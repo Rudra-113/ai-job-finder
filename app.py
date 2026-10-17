@@ -50,8 +50,14 @@ def create_app(home: Path | None = None) -> Flask:
     app.config["SESSION_COOKIE_SECURE"] = False
     app.extensions["home"] = home
     Store(home).recover()
-    if load_state(home).get("running"):
-        write_state(home, running=False, status_line="Stopped because the app was restarted.")
+    if load_state(home).get("running") or load_state(home).get("search_status") in {"running", "paused"}:
+        write_state(
+            home,
+            running=False,
+            search_status="stopped",
+            status_line="Stopped because the app was restarted.",
+            current=None,
+        )
     app.extensions["agent"] = AgentService(home)
 
     def current_home() -> Path:
@@ -120,7 +126,35 @@ def create_app(home: Path | None = None) -> Flask:
     @app.post("/stop")
     def stop():
         agent().request_stop()
-        set_flash("Stopping after the current step.")
+        set_flash("Stopping. An open form is closed without submitting.")
+        return redirect(url_for("index"))
+
+    @app.post("/application/submit")
+    def submit_application():
+        agent().request_submit()
+        set_flash("Submitting the open application.")
+        return redirect(url_for("index"))
+
+    @app.post("/application/skip")
+    def skip_application():
+        agent().request_skip()
+        set_flash("Skipped. Nothing was submitted.")
+        return redirect(url_for("index"))
+
+    @app.post("/application/edit")
+    def edit_application():
+        answers = {}
+        for line in (request.form.get("notes") or "").splitlines():
+            if ":" not in line:
+                continue
+            label, value = line.split(":", 1)
+            if label.strip() and value.strip():
+                answers[label.strip()] = value.strip()
+        if not answers:
+            set_flash("Add one true answer per line, written as Question: answer.")
+        else:
+            agent().request_edit(answers)
+            set_flash("Adding those answers on the open form. Nothing was submitted.")
         return redirect(url_for("index"))
 
     @app.get("/settings")
@@ -263,16 +297,26 @@ def _snapshot(home: Path) -> dict:
     attention = [row for row in records if row.get("status") == "needs_user"]
     for row in submitted + attention:
         row["url"] = safe_http_url(row.get("url") or "")
+    current = state.get("current") if isinstance(state.get("current"), dict) else None
+    if current:
+        current["url"] = safe_http_url(current.get("url") or "")
     return {
         "running": bool(state.get("running")),
+        "search_status": state.get("search_status") or ("running" if state.get("running") else "stopped"),
         "found": state.get("found") or 0,
         "rejected": state.get("rejected") or 0,
+        "qualified": state.get("qualified") or 0,
+        "needs_review": state.get("needs_review") or 0,
+        "filled": state.get("filled") or 0,
         "submitted": state.get("submitted") or 0,
+        "skipped": state.get("skipped") or 0,
         "failed": state.get("failed") or 0,
+        "queue_size": state.get("queue_size") or 0,
         "status_line": state.get("status_line") or "",
         "warnings": state.get("warnings") or [],
         "failures": state.get("failures") or [],
         "rejection_counts": state.get("rejection_counts") or {},
+        "current": current,
         "applications": submitted[:100],
         "attention": attention,
     }

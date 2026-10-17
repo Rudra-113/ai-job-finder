@@ -50,3 +50,6 @@ class ApplyResult:
     blocks_retry: bool = False
     submit_clicked: bool = False
     screenshot: str = ""
+    filled: list[str] = field(default_factory=list)
+    answered: list[str] = field(default_factory=list)
+    needs_input: list[str] = field(default_factory=list)

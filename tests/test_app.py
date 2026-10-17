@@ -32,8 +32,10 @@ def test_pages_and_csrf_and_host(tmp_path):
     assert b"Target roles" in page.data
     assert b"Minimum stipend" in page.data
     assert b"Minimum match score" in page.data
-    assert b"Start search" in page.data
-    assert b"Jobs found" in page.data
+    assert b"Start continuous search" in page.data
+    assert b"Found" in page.data
+    assert b"Qualified" in page.data
+    assert b"Submit" in page.data
     denied = client.post(
         "/start",
         data={"sector": "data", "roles": "analyst", "minimum_stipend": "0", "minimum_score": "70"},
@@ -114,8 +116,8 @@ def test_cycle_applies_once_and_skips_the_rest(tmp_path, monkeypatch):
         calls.append(job.url)
         return ApplyResult("submitted", "The site confirmed the application.", "", True, True)
 
-    monkeypatch.setattr("jobagent.runner.search_jobs", lambda _settings: ([good, unpaid, outside], []))
-    monkeypatch.setattr("jobagent.runner.apply_to_job", fake_apply)
+    monkeypatch.setattr("jobagent.runner.search_jobs", lambda _settings, _queries=None: ([good, unpaid, outside], []))
+    monkeypatch.setattr("jobagent.runner.open_application", fake_apply)
     run_cycle(home)
     assert calls == [good.url]
     state = json.loads((home / "state.json").read_text(encoding="utf-8"))

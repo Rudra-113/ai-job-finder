@@ -22,6 +22,7 @@ class Settings:
     preferred_companies: list[str] = field(default_factory=list)
     excluded_companies: list[str] = field(default_factory=list)
     minimum_score: int = 70
+    allow_hybrid: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -34,6 +35,7 @@ class Settings:
             "preferred_companies": self.preferred_companies,
             "excluded_companies": self.excluded_companies,
             "minimum_score": self.minimum_score,
+            "allow_hybrid": self.allow_hybrid,
         }
 
     @classmethod
@@ -59,6 +61,7 @@ class Settings:
             preferred_companies=_list(data.get("preferred_companies")),
             excluded_companies=_list(data.get("excluded_companies")),
             minimum_score=min(100, max(0, score)),
+            allow_hybrid=bool(data.get("allow_hybrid")),
         )
 
 
@@ -144,5 +147,6 @@ def apply_settings_form(form) -> tuple[Settings, str | None]:
         preferred_companies=split_csv(form.get("preferred_companies") or ""),
         excluded_companies=split_csv(form.get("excluded_companies") or ""),
         minimum_score=score,
+        allow_hybrid=(form.get("allow_hybrid") or "") in {"1", "on", "true", "yes"},
     )
     return settings, None

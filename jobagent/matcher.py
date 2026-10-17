@@ -54,10 +54,52 @@ def required_degree(text: str) -> str | None:
     return None
 
 
+_GENERIC = {"intern", "internship", "trainee", "remote", "india", "engineer", "engineering"}
+_EXPAND = {
+    "cybersecurity": {"security", "cyber"},
+    "cyber": {"security", "cybersecurity"},
+    "infosec": {"security", "cybersecurity"},
+    "vapt": {"security", "penetration", "vulnerability"},
+    "pentest": {"security", "penetration", "vulnerability"},
+    "penetration": {"security", "vulnerability", "vapt"},
+    "soc": {"security", "analyst"},
+    "appsec": {"security", "application"},
+}
+
+
+def _expanded(text: str) -> set[str]:
+    tokens = set(re.findall(r"[a-z0-9+#.]+", (text or "").casefold()))
+    extra: set[str] = set()
+    for token in tokens:
+        extra.update(_EXPAND.get(token, ()))
+    return tokens | extra
+
+
+def semantic_role_points(job: Job, roles: list[str]) -> int:
+    """Related titles count. 'Security Engineering Intern' can match 'Cybersecurity Intern'."""
+    title = _expanded(job.title)
+    hay = _expanded(f"{job.title} {job.employment} {job.category} {' '.join(job.tags)} {job.description[:2000]}")
+    best = 0
+    for role in roles:
+        wanted = {token for token in _expanded(role) if token not in _GENERIC and len(token) > 2}
+        if not wanted:
+            wanted = _expanded(role)
+        if not wanted:
+            continue
+        if wanted & title:
+            best = max(best, 30)
+        elif len(wanted & hay) / len(wanted) >= 0.34:
+            best = max(best, 18)
+    return best
+
+
 def score_job(job: Job, profile: Profile, settings: Settings) -> int:
     blob = listing_blob(job)
     evidence = evidence_text(profile)
-    role_points = 30 if role_in_title(job, settings.roles) else 15 if role_matches(job, settings.roles) else 0
+    role_points = max(
+        30 if role_in_title(job, settings.roles) else 15 if role_matches(job, settings.roles) else 0,
+        semantic_role_points(job, settings.roles),
+    )
     if profile.skills:
         hits = sum(1 for skill in profile.skills if skill_in_text(skill, blob))
         skill_points = round(40 * hits / len(profile.skills))

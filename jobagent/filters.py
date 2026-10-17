@@ -9,7 +9,6 @@ from jobagent.criteria import (
     age_problem,
     company_named,
     required_skills_listed,
-    role_matches,
     sector_matches,
     stipend_problem,
     workplace_problem,
@@ -53,8 +52,6 @@ def screen(
         return Decision(False, "Excluded company")
     if not sector_matches(job, settings.sectors):
         return Decision(False, "Outside your sector")
-    if not role_matches(job, settings.roles):
-        return Decision(False, "Role does not match")
     if not required_skills_listed(job, settings.required_skills):
         return Decision(False, "Does not list a required skill")
     place = workplace_problem(job, settings)

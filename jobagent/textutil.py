@@ -273,6 +273,18 @@ def safe_http_url(url: str) -> str:
     return ""
 
 
+def normalized_title(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (title or "").casefold()).strip()
+
+
+def duplicate_key(job: Job) -> str:
+    company = re.sub(r"[^a-z0-9]+", "", (job.company or "").casefold())
+    title = normalized_title(job.title)
+    if not company or not title:
+        return ""
+    return f"{company}|{title}"
+
+
 def job_identity(job: Job) -> str:
     company = re.sub(r"[^a-z0-9]+", "", job.company.casefold())
     title = re.sub(r"[^a-z0-9]+", "", job.title.casefold())
