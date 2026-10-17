@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Settings</h1>
+<p class="hint">A job outside these rules is skipped. Preferred companies also have their Greenhouse, Lever, and Ashby pages checked. Other companies can still match from the job boards.</p>
+<form class="stack" method="post" action="{{ url_for('save_settings_page') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="sector">Target sector</label>
+  <input id="sector" name="sector" value="{{ sector }}" required>
+  <p class="hint">Comma-separated. A job must match one full phrase, using words that appear in postings.</p>
+  <label for="roles">Target roles</label>
+  <input id="roles" name="roles" value="{{ roles }}" required>
+  <p class="hint">Comma-separated. The title should match one of these.</p>
+  <label for="required_skills">Required skills</label>
+  <input id="required_skills" name="required_skills" value="{{ required_skills }}">
+  <p class="hint">Every skill here must appear in the listing. Leave blank to use your CV for scoring only.</p>
+  <label for="location">Location</label>
+  <input id="location" name="location" value="{{ settings.location }}">
+  <p class="hint">Use the full place name. Remote listings must allow this place when they state a restriction.</p>
+  <label for="workplace">Remote/onsite</label>
+  <select id="workplace" name="workplace">
+    {% for value, label in [("any", "Any"), ("remote", "Remote"), ("onsite", "Onsite"), ("hybrid", "Hybrid")] %}
+    <option value="{{ value }}" {% if settings.workplace == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label for="minimum_stipend">Minimum stipend</label>
+  <input id="minimum_stipend" name="minimum_stipend" type="number" min="0" step="1" value="{{ '%g'|format(settings.minimum_stipend) }}" required>
+  <p class="hint">Monthly amount. Hourly or weekly pay counts only when the listing says full-time. Unpaid roles are always skipped.</p>
+  <label for="preferred_companies">Preferred companies</label>
+  <input id="preferred_companies" name="preferred_companies" value="{{ preferred }}">
+  <label for="excluded_companies">Excluded companies</label>
+  <input id="excluded_companies" name="excluded_companies" value="{{ excluded }}">
+  <p class="hint">A company whose name contains one of these is never opened.</p>
+  <label for="minimum_score">Minimum match score</label>
+  <input id="minimum_score" name="minimum_score" type="number" min="0" max="100" step="1" value="{{ settings.minimum_score }}" required>
+  <button type="submit">Save settings</button>
+</form>
+{% endblock %}

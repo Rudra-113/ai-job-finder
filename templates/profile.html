@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Profile</h1>
+<p class="hint">Applications use only what you save here. Missing facts pause that application instead of inventing an answer.</p>
+<form class="stack" method="post" action="{{ url_for('save_profile_page') }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="full_name">Full name</label>
+  <input id="full_name" name="full_name" value="{{ profile.full_name }}" autocomplete="name" required>
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" value="{{ profile.email }}" autocomplete="email" required>
+  <label for="phone">Phone</label>
+  <input id="phone" name="phone" type="tel" value="{{ profile.phone }}" autocomplete="tel">
+  <label for="city">City</label>
+  <input id="city" name="city" value="{{ profile.city }}" autocomplete="address-level2">
+  <label for="country">Country</label>
+  <input id="country" name="country" value="{{ profile.country }}" autocomplete="country-name">
+  <label for="portfolio">Portfolio URL</label>
+  <input id="portfolio" name="portfolio" type="url" value="{{ profile.portfolio }}" placeholder="https://">
+  <label for="linkedin">LinkedIn URL</label>
+  <input id="linkedin" name="linkedin" type="url" value="{{ profile.linkedin }}" placeholder="https://">
+  <label for="github">GitHub URL</label>
+  <input id="github" name="github" type="url" value="{{ profile.github }}" placeholder="https://">
+  <label for="work_authorized">Work authorization</label>
+  <select id="work_authorized" name="work_authorized">
+    <option value="" {% if not profile.work_authorized %}selected{% endif %}>Not specified</option>
+    <option value="yes" {% if profile.work_authorized == "yes" %}selected{% endif %}>Yes, I am authorized to work where I apply</option>
+    <option value="no" {% if profile.work_authorized == "no" %}selected{% endif %}>No</option>
+  </select>
+  <label for="needs_sponsorship">Visa sponsorship</label>
+  <select id="needs_sponsorship" name="needs_sponsorship">
+    <option value="" {% if not profile.needs_sponsorship %}selected{% endif %}>Not specified</option>
+    <option value="yes" {% if profile.needs_sponsorship == "yes" %}selected{% endif %}>Yes, I will need sponsorship</option>
+    <option value="no" {% if profile.needs_sponsorship == "no" %}selected{% endif %}>No, I will not need sponsorship</option>
+  </select>
+  <label for="skills">Skills</label>
+  <input id="skills" name="skills" value="{{ profile.skills | join(', ') }}">
+  <label for="education_raw">Education</label>
+  <textarea id="education_raw" name="education_raw" placeholder="BSc | Statistics | State University | 2026">{{ profile.education_raw }}</textarea>
+  <p class="hint">One school per line: Degree | Field | School | End</p>
+  <label for="experience_raw">Experience</label>
+  <textarea id="experience_raw" name="experience_raw" placeholder="Data Analyst Intern | City Lab | 2024-06 | 2024-08 | Used Python and SQL">{{ profile.experience_raw }}</textarea>
+  <p class="hint">One role per line: Title | Company | Start | End | What you did. Dates are YYYY-MM. Use present if you still work there.</p>
+  <label for="projects">Projects</label>
+  <textarea id="projects" name="projects">{{ profile.projects }}</textarea>
+  <label for="extra_facts">Facts answers may use</label>
+  <textarea id="extra_facts" name="extra_facts" placeholder="Notice period: 4 weeks">{{ profile.extra_facts }}</textarea>
+  <p class="hint">One true fact per line, written as Label: value. A question that is not covered here is left unanswered.</p>
+  <label for="cv">CV</label>
+  <input id="cv" name="cv" type="file" accept=".pdf,.docx,.txt,.md">
+  {% if cv_name %}<p class="hint">Saved file: {{ cv_name }}</p>{% endif %}
+
+  <h2>Answer API</h2>
+  <p class="hint">Optional. OpenAI uses https://api.openai.com/v1. Grok uses https://api.x.ai/v1 and the model name from your xAI account. Without a key, only your saved facts are used.</p>
+  <label for="api_base">API base URL</label>
+  <input id="api_base" name="api_base" value="{{ api_base }}">
+  <label for="api_model">Model</label>
+  <input id="api_model" name="api_model" value="{{ api_model }}">
+  <label for="api_key">API key</label>
+  <input id="api_key" name="api_key" type="password" autocomplete="off" placeholder="{% if api_key_set %}Saved. Leave blank to keep it.{% endif %}">
+  <label class="check" for="clear_api_key"><input id="clear_api_key" name="clear_api_key" type="checkbox"> Remove saved API key</label>
+
+  <h2>Gmail for one-time codes</h2>
+  <p class="hint">Upload a desktop OAuth client JSON. The app never asks for your Gmail password. It requests read-only access and opens only a recent message that matches a code, after an application asks for one.</p>
+  <label for="gmail_client">OAuth client file</label>
+  <input id="gmail_client" name="gmail_client" type="file" accept="application/json,.json">
+  {% if gmail_file %}<p class="hint">A client file is saved.</p>{% endif %}
+  <p class="hint">Status: {% if gmail_connected %}Connected{% else %}Not connected{% endif %}</p>
+  <button type="submit">Save profile</button>
+</form>
+<div class="actions">
+  <form method="post" action="{{ url_for('gmail_connect') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit">Connect Gmail</button>
+  </form>
+  <form method="post" action="{{ url_for('gmail_disconnect') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="secondary" type="submit">Disconnect Gmail</button>
+  </form>
+</div>
+{% endblock %}

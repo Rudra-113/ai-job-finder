@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf" content="{{ csrf }}">
+  <title>{{ title }} — Job Agent</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{ url_for('index') }}">Job Agent</a>
+    <nav>
+      <a href="{{ url_for('index') }}" {% if active == "search" %}aria-current="page"{% endif %}>Search</a>
+      <a href="{{ url_for('settings_page') }}" {% if active == "settings" %}aria-current="page"{% endif %}>Settings</a>
+      <a href="{{ url_for('profile_page') }}" {% if active == "profile" %}aria-current="page"{% endif %}>Profile</a>
+    </nav>
+  </header>
+  <main>
+    {% if flash %}
+    <p class="banner" role="status">{{ flash }}</p>
+    {% endif %}
+    {% block body %}{% endblock %}
+  </main>
+  <footer>
+    <p>Runs on this computer only. Listings are read from Remotive, Remote OK, Arbeitnow, The Muse, Jobicy, Himalayas, and public Greenhouse, Lever, and Ashby career pages. This app does not publish them.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Search</h1>
+<p class="hint">Each pass submits at most 5 applications, then waits 30 minutes. Listings older than 30 days are skipped. Other rules are on Settings. Your CV is on Profile.</p>
+<p id="status-line" role="status">{{ status_line }}</p>
+
+<form id="start-form" class="stack" method="post" action="{{ url_for('start') }}" {% if running %}hidden{% endif %}>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="sector">Target sector</label>
+  <input id="sector" name="sector" value="{{ sector }}" autocomplete="off" required>
+  <label for="roles">Target roles</label>
+  <input id="roles" name="roles" value="{{ roles }}" autocomplete="off" required>
+  <label for="minimum_stipend">Minimum stipend</label>
+  <input id="minimum_stipend" name="minimum_stipend" type="number" min="0" step="1" value="{{ '%g'|format(settings.minimum_stipend) }}" required>
+  <p class="hint">Monthly amount. Use 0 to allow listings that do not state pay. Unpaid listings are always skipped. Currency is not converted.</p>
+  <label for="minimum_score">Minimum match score</label>
+  <input id="minimum_score" name="minimum_score" type="number" min="0" max="100" step="1" value="{{ settings.minimum_score }}" required>
+  <button type="submit">Start search</button>
+</form>
+
+<form id="stop-form" method="post" action="{{ url_for('stop') }}" {% if not running %}hidden{% endif %}>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="secondary" type="submit">Stop</button>
+</form>
+
+<dl class="counts">
+  <dt>Jobs found</dt><dd id="found">{{ found }}</dd>
+  <dt>Jobs rejected</dt><dd id="rejected">{{ rejected }}</dd>
+  <dt>Applications submitted</dt><dd id="submitted">{{ submitted }}</dd>
+  <dt>Applications failed</dt><dd id="failed">{{ failed }}</dd>
+</dl>
+
+<div id="reasons">
+  {% if rejection_counts %}
+  <h2>Why listings were skipped</h2>
+  <ul>
+    {% for reason, count in rejection_counts.items() %}
+    <li>{{ reason }}: {{ count }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+<div id="failures">
+  {% if failures %}
+  <h2>Failed this run</h2>
+  <ul>
+    {% for item in failures %}
+    <li>{{ item.company }} — {{ item.role }} — {{ item.reason }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+<div id="attention">
+  {% if attention %}
+  <h2>Needs you</h2>
+  {% for row in attention %}
+  <article class="note">
+    <strong>{{ row.company }} — {{ row.role }}</strong>
+    <p>{{ row.reason }}</p>
+    {% if row.url %}
+    <p><a href="{{ row.url }}" rel="noopener noreferrer">Application page</a></p>
+    {% endif %}
+    {% if row.screenshot %}
+    <p class="hint">Screenshot: {{ row.screenshot }}</p>
+    {% endif %}
+    <div class="actions">
+      <form method="post" action="{{ url_for('retry', record_id=row.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit">Try again</button>
+      </form>
+      <form method="post" action="{{ url_for('dismiss', record_id=row.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="secondary" type="submit">Don't apply</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+  {% endif %}
+</div>
+
+<h2>Submitted applications</h2>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>Role</th>
+        <th>Date</th>
+        <th>Application URL</th>
+        <th>Match score</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="applications">
+      {% if applications %}
+        {% for row in applications %}
+        <tr>
+          <td>{{ row.company }}</td>
+          <td>{{ row.role }}</td>
+          <td>{{ row.date }}</td>
+          <td>{% if row.url %}<a href="{{ row.url }}" rel="noopener noreferrer">{{ row.url }}</a>{% endif %}</td>
+          <td>{{ row.match_score }}</td>
+          <td>{{ row.status }}</td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="6">No applications submitted yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+<noscript><p>Refresh the page to update these numbers.</p></noscript>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}
