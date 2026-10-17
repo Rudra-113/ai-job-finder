@@ -131,6 +131,9 @@ def create_app(home: Path | None = None) -> Flask:
 
     @app.post("/application/submit")
     def submit_application():
+        if not agent().session.is_open():
+            set_flash("No form is waiting. Complete applications are submitted automatically. Turn on Review before submit to hold each form.")
+            return redirect(url_for("index"))
         agent().request_submit()
         set_flash("Submitting the open application.")
         return redirect(url_for("index"))
@@ -288,6 +291,25 @@ def create_app(home: Path | None = None) -> Flask:
     return app
 
 
+def _attempts(records: list[dict]) -> list[dict]:
+    rows = []
+    for record in reversed(records):
+        status = record.get("status") or ""
+        if status in {"rejected", "cleared", "dismissed"}:
+            continue
+        rows.append(
+            {
+                "company": record.get("company") or "",
+                "role": record.get("role") or "",
+                "status": status,
+                "reason": record.get("reason") or record.get("result") or "",
+            }
+        )
+        if len(rows) >= 8:
+            break
+    return rows
+
+
 def _snapshot(home: Path) -> dict:
     state = load_state(home)
     state["running"] = state.get("running") and True
@@ -319,6 +341,7 @@ def _snapshot(home: Path) -> dict:
         "current": current,
         "applications": submitted[:100],
         "attention": attention,
+        "attempts": _attempts(records),
     }
 
 

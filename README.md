@@ -1,6 +1,6 @@
 # Job Agent
 
-A private job and internship agent that runs only on your Windows computer. You set a sector, roles, and pay floor. It searches public listings until you click Stop, scores them against your CV, and fills one application at a time. It does not submit until you click Submit.
+A private job and internship agent that runs only on your Windows computer. You set a sector, roles, and pay floor. It searches public listings until you click Stop, scores them against your CV, and applies to each qualified job in turn. A complete form is submitted automatically. Review before submit holds the form until you click Submit.
 
 The page listens on [http://127.0.0.1:47321](http://127.0.0.1:47321). It does not accept connections from other computers.
 
@@ -63,6 +63,7 @@ Open **Settings** and save every rule the agent must follow:
 - Preferred companies
 - Excluded companies
 - Minimum match score, from 0 to 100
+- Review before submit, off by default
 
 A listing outside these rules is skipped. Preferred companies also have their public Greenhouse, Lever, and Ashby career pages checked. They are not a closed list: other companies can still match from the job boards. A company whose name contains an excluded name is never opened.
 
@@ -70,7 +71,11 @@ A listing outside these rules is skipped. Preferred companies also have their pu
 
 On **Search**, confirm the sector, roles, minimum stipend, and minimum match score, then click **Start continuous search**.
 
-The agent searches until you click **Stop**. It fills one matching application at a time and leaves the browser on that form. The page shows the company, role, match score, pay, location, posting date, filled fields, answered questions, and anything that needs your input. It submits only when you click **Submit**. **Skip** closes the form without sending it. **Edit / Continue** writes answers you type, one per line as `Question: answer`. **Open application** opens the listing URL.
+The agent searches until you click **Stop**. Every qualified job is queued and then opened, one at a time. When the form can be completed from your profile, it is submitted and the next job starts. There is no wait between applications.
+
+**Review before submit** in Settings holds a filled form until you click **Submit**. **Skip** closes that form without sending it. **Edit / Continue** writes answers you type, one per line as `Question: answer`.
+
+A CAPTCHA, identity check, payment request, login wall, mandatory video, or missing required fact is recorded with the reason and the next job starts. The search does not stop because one site failed. Recent attempts are listed on the Search page, and `data\agent.log` has the same reason.
 
 Missing pay is kept and marked unknown. Unpaid roles are skipped. A stated stipend below your minimum is skipped. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
 

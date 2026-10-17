@@ -125,7 +125,11 @@ def _needs(reason: str, blocks: bool = True, clicked: bool = False) -> ApplyResu
 
 
 def _failed(reason: str) -> ApplyResult:
-    return ApplyResult("failed", "", reason, False, False)
+    return ApplyResult("failed", "", reason, True, False)
+
+
+def _skipped(reason: str) -> ApplyResult:
+    return ApplyResult("skipped", "", reason, True, False)
 
 
 def field_kind(field: dict) -> str:
@@ -284,15 +288,57 @@ def detect_login(target) -> bool:
     ))
 
 
+def detect_video_or_interview(target) -> bool:
+    text = _visible_text(target)[:8000].casefold()
+    phrases = (
+        "record a video",
+        "video response is required",
+        "video introduction is required",
+        "mandatory video",
+        "one-way video interview",
+        "complete a video interview",
+        "complete the video interview",
+        "live interview is required",
+        "join the live interview",
+        "start video interview",
+    )
+    if any(phrase in text for phrase in phrases):
+        return True
+    if any(
+        _has_visible(target, selector)
+        for selector in (
+            "iframe[src*='hirevue']",
+            "iframe[src*='sparkhire']",
+            "iframe[src*='myinterview']",
+            "iframe[src*='vidcruiter']",
+        )
+    ):
+        return True
+    files = target.locator("input[type='file']")
+    count = min(files.count(), 8)
+    for index in range(count):
+        control = files.nth(index)
+        try:
+            accept = (control.get_attribute("accept") or "").casefold()
+            required = control.get_attribute("required") is not None or control.get_attribute("aria-required") == "true"
+        except Exception:
+            continue
+        if required and "video" in accept:
+            return True
+    return False
+
+
 def detect_block(target) -> ApplyResult | None:
     if detect_captcha(target):
-        return _needs("A CAPTCHA or human check appeared. This application was stopped and will not be bypassed.")
+        return _needs("A CAPTCHA or human check appeared. This application was not submitted and will not be bypassed.")
     if detect_payment(target):
-        return _needs("The site asked for a payment. Nothing was paid and the application was stopped.")
+        return _needs("The site asked for a payment. Nothing was paid and this application was not submitted.")
     if detect_login(target):
         return _needs("The site asked for a login or a new account. Login protection was not bypassed.")
     if verification_in_text(_visible_text(target)[:8000]):
-        return _needs("An identity check appeared that this agent will not complete.")
+        return _needs("An identity check appeared. This application was not submitted.")
+    if detect_video_or_interview(target):
+        return _skipped("A mandatory video or live interview is on this page. This application was skipped.")
     return None
 
 
@@ -892,7 +938,7 @@ def complete_application(page, job: Job, profile: Profile, secrets: Secrets, otp
         fields = read_fields(target)
         visible = [field for field in fields if field.get("visible") and field.get("type") not in {"hidden", "submit", "button"}]
         if not visible:
-            return _needs("Could not find an application form on this page.")
+            return _failed("Could not find an application form on this page.")
         confirmed: set[int] = set()
         gaps: list[str] = []
         outcome = fill_fields(
@@ -919,8 +965,14 @@ def complete_application(page, job: Job, profile: Profile, secrets: Secrets, otp
         if issues:
             return _needs("Stopped before submit. Required fields were not confirmed: " + "; ".join(issues[:8]))
         if action == "submit":
-            return click_submit(target, button)
-        return _needs("Could not find a submit button that is clearly an application submit.")
+            result = click_submit(target, button)
+            if result.status == "submitted":
+                filled, answered, needs = _summarize(current, confirmed, [])
+                result.filled = filled
+                result.answered = answered
+                result.needs_input = needs
+            return result
+        return _failed("Could not find a submit button that is clearly an application submit.")
     return _needs("The application has more steps than this agent will follow automatically.")
 
 
@@ -953,7 +1005,7 @@ class ApplicationSession:
         except Exception:
             pass
 
-    def open_and_fill(self, job, profile, secrets, home: Path, otp_reader, headless: bool, screenshot_path: Path | None) -> ApplyResult:
+    def open_and_fill(self, job, profile, secrets, home: Path, otp_reader, headless: bool, screenshot_path: Path | None, preview: bool = False) -> ApplyResult:
         self.close()
         url = safe_http_url(job.apply_url or job.url)
         if not url:
@@ -980,14 +1032,14 @@ class ApplicationSession:
                 page.wait_for_load_state("networkidle", timeout=8000)
             except Exception:
                 pass
-            result = complete_application(page, job, profile, secrets, otp_reader, home, preview=True)
+            result = complete_application(page, job, profile, secrets, otp_reader, home, preview=preview)
         except PlaywrightTimeout:
             self.close()
             return _failed("The application page did not load.")
         except Exception:
             self.close()
             return _needs("The browser stopped unexpectedly. The application was not submitted.")
-        if result.status != "filled":
+        if not preview or result.status != "filled":
             if screenshot_path is not None and self.page is not None:
                 _save_shot(self.page, screenshot_path, result)
             self.close()

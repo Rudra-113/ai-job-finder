@@ -23,6 +23,7 @@ class Settings:
     excluded_companies: list[str] = field(default_factory=list)
     minimum_score: int = 70
     allow_hybrid: bool = False
+    manual_review: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -36,6 +37,7 @@ class Settings:
             "excluded_companies": self.excluded_companies,
             "minimum_score": self.minimum_score,
             "allow_hybrid": self.allow_hybrid,
+            "manual_review": self.manual_review,
         }
 
     @classmethod
@@ -62,6 +64,7 @@ class Settings:
             excluded_companies=_list(data.get("excluded_companies")),
             minimum_score=min(100, max(0, score)),
             allow_hybrid=bool(data.get("allow_hybrid")),
+            manual_review=bool(data.get("manual_review")),
         )
 
 
@@ -148,5 +151,6 @@ def apply_settings_form(form) -> tuple[Settings, str | None]:
         excluded_companies=split_csv(form.get("excluded_companies") or ""),
         minimum_score=score,
         allow_hybrid=(form.get("allow_hybrid") or "") in {"1", "on", "true", "yes"},
+        manual_review=(form.get("manual_review") or "") in {"1", "on", "true", "yes"},
     )
     return settings, None

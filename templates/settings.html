@@ -17,6 +17,8 @@
   <input id="location" name="location" value="{{ settings.location }}">
   <p class="hint">Use the full place name. Remote listings must allow this place when they state a restriction.</p>
   <label class="check" for="allow_hybrid"><input id="allow_hybrid" name="allow_hybrid" type="checkbox" {% if settings.allow_hybrid %}checked{% endif %}> Allow hybrid</label>
+  <label class="check" for="manual_review"><input id="manual_review" name="manual_review" type="checkbox" {% if settings.manual_review %}checked{% endif %}> Review before submit</label>
+  <p class="hint">Leave this off to submit a complete application and move to the next job. Turn it on to hold each filled form until you click Submit.</p>
   <p class="hint">Hybrid roles are skipped unless this is checked. On-site roles are skipped when Remote is selected. Missing pay is kept and marked unknown. Unpaid roles are skipped.</p>
   <label for="workplace">Remote/onsite</label>
   <select id="workplace" name="workplace">

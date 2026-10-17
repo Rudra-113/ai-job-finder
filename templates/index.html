@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block body %}
 <h1>Search</h1>
-<p class="hint">Search keeps running until you press Stop. A matching form is filled and left open. Nothing is submitted until you click Submit.</p>
+<p class="hint">Search keeps running until you press Stop. Each qualified job is opened and filled. A complete form is submitted, then the next job starts.</p>
+<p class="hint">{% if settings.manual_review %}Review before submit is on. A filled form waits here for Submit.{% else %}Automatic mode is on. Submit on this page is only for review mode.{% endif %}</p>
 <p id="status-line" role="status">{{ status_line }}</p>
 <p>Search status: <strong id="search-status">{{ search_status }}</strong></p>
 
@@ -26,6 +27,7 @@
 
 <dl class="counts">
   <dt>Found</dt><dd id="found">{{ found }}</dd>
+  <dt>In queue</dt><dd id="queue-size">{{ queue_size }}</dd>
   <dt>Qualified</dt><dd id="qualified">{{ qualified }}</dd>
   <dt>Needs review</dt><dd id="needs-review">{{ needs_review }}</dd>
   <dt>Filled</dt><dd id="filled">{{ filled }}</dd>
@@ -48,6 +50,7 @@
   {% endif %}
 </section>
 
+<p class="hint">Submit, Skip, and Edit are for review mode, when a form is waiting. They do not send a new application on their own.</p>
 <div class="actions" id="review-actions">
   <form method="post" action="{{ url_for('submit_application') }}">
     <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -74,6 +77,17 @@
   <ul>
     {% for reason, count in rejection_counts.items() %}
     <li>{{ reason }}: {{ count }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+<div id="attempts">
+  {% if attempts %}
+  <h2>Recent application attempts</h2>
+  <ul>
+    {% for item in attempts %}
+    <li>{{ item.company }} — {{ item.role }} — {{ item.status }}{% if item.reason %} — {{ item.reason }}{% endif %}</li>
     {% endfor %}
   </ul>
   {% endif %}
@@ -127,8 +141,9 @@
         <th>Role</th>
         <th>Date</th>
         <th>Application URL</th>
-        <th>Match score</th>
-        <th>Status</th>
+          <th>Match score</th>
+          <th>Resume</th>
+          <th>Status</th>
       </tr>
     </thead>
     <tbody id="applications">
@@ -140,11 +155,12 @@
           <td>{{ row.date }}</td>
           <td>{% if row.url %}<a href="{{ row.url }}" rel="noopener noreferrer">{{ row.url }}</a>{% endif %}</td>
           <td>{{ row.match_score }}</td>
+          <td>{{ row.resume or "" }}</td>
           <td>{{ row.status }}</td>
         </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="6">No applications submitted yet.</td></tr>
+        <tr><td colspan="7">No applications submitted yet.</td></tr>
       {% endif %}
     </tbody>
   </table>

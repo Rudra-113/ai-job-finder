@@ -333,6 +333,39 @@ def test_combobox_yes_does_not_fill_demographic_fields(browser_page, tmp_path):
     assert "neurodivergent" not in blob
 
 
+VIDEO = """
+<!DOCTYPE html>
+<html><body>
+<form method="post" action="/submitted">
+  <label for="email">Email *</label>
+  <input id="email" name="email" type="email" required>
+  <p>Please record a video introduction before you continue.</p>
+  <button type="submit">Submit application</button>
+</form>
+</body></html>
+"""
+
+
+def test_video_interview_is_skipped_without_submitting(browser_page, tmp_path):
+    result, posts = run_form(browser_page, VIDEO, strong_profile(tmp_path), tmp_path, lambda _domains: None)
+    assert posts == []
+    assert result.status == "skipped"
+    assert "video" in result.reason.lower()
+
+
+def test_local_form_submits_then_a_captcha_form_does_not(browser_page, tmp_path):
+    profile = strong_profile(tmp_path)
+    submitted, posts = run_form(browser_page, FORM, profile, tmp_path, lambda _domains: None)
+    assert submitted.status == "submitted", submitted.reason
+    assert submitted.submit_clicked is True
+    assert posts
+    assert any("ada@example.com" in item or "ada%40example.com" in item for item in submitted.filled) or b"ada" in posts[0]
+    blocked, blocked_posts = run_form(browser_page, CAPTCHA, profile, tmp_path, lambda _domains: None)
+    assert blocked_posts == []
+    assert blocked.status == "needs_user"
+    assert "captcha" in blocked.reason.lower()
+
+
 def test_email_otp_is_entered(browser_page, tmp_path):
     result, posts = run_form(
         browser_page,

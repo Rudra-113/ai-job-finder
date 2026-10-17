@@ -1,4 +1,9 @@
-"""Continuous search. One form is filled at a time and waits for Submit or Skip."""
+"""Continuous search. Qualified jobs are applied one at a time.
+
+Automatic mode submits a form when every required field can be filled from the
+profile. Review mode leaves the form open for Submit. A blocked application is
+recorded and the next qualified job starts.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +28,6 @@ from jobagent.store import Store
 from jobagent.textutil import canonical_url, duplicate_key, job_identity, safe_http_url
 
 logger = logging.getLogger("jobagent")
-QUEUE_LIMIT = 20
 
 
 def state_path(home: Path) -> Path:
@@ -42,7 +46,7 @@ def default_state() -> dict:
         "submitted": 0,
         "skipped": 0,
         "failed": 0,
-        "status_line": "Stopped. Nothing is submitted until you click Submit on a filled form.",
+        "status_line": "Stopped. Qualified jobs are submitted automatically unless review mode is on.",
         "warnings": [],
         "failures": [],
         "rejection_counts": {},
@@ -108,6 +112,8 @@ def make_record(job: Job, score: int, result: ApplyResult) -> dict:
         "filled": list(result.filled),
         "answered": list(result.answered),
         "needs_input": list(result.needs_input),
+        "resume": "",
+        "submitted_at": "",
     }
 
 
@@ -157,9 +163,35 @@ def next_queries(settings, cursor: list[int]) -> list[str]:
     return window
 
 
-def open_application(job, profile, secrets, home, otp_reader, headless, screenshot_path, session: ApplicationSession | None = None):
+def open_application(job, profile, secrets, home, otp_reader, headless, screenshot_path, session: ApplicationSession | None = None, preview: bool = False):
     holder = session or ApplicationSession()
-    return holder.open_and_fill(job, profile, secrets, home, otp_reader, headless, screenshot_path)
+    return holder.open_and_fill(job, profile, secrets, home, otp_reader, headless, screenshot_path, preview=preview)
+
+
+def job_from_record(record: dict) -> Job:
+    url = record.get("url") or ""
+    return Job(
+        source=str(record.get("source") or "queue"),
+        company=str(record.get("company") or ""),
+        title=str(record.get("role") or ""),
+        url=url,
+        apply_url=url,
+        location=str(record.get("location") or ""),
+        workplace=str(record.get("remote") or "unknown"),
+    )
+
+
+def load_queued(home: Path) -> list[tuple[Job, int]]:
+    pending: list[tuple[Job, int]] = []
+    for record in Store(home).records():
+        if record.get("status") != "queued" or not record.get("url"):
+            continue
+        try:
+            score = int(record.get("match_score") or 0)
+        except (TypeError, ValueError):
+            score = 0
+        pending.append((job_from_record(record), score))
+    return pending
 
 
 def run_cycle(
@@ -232,10 +264,10 @@ def run_cycle(
             store.upsert(make_record(job, decision.score, ApplyResult("rejected", "", decision.reason, True, False)))
             continue
         numbers["qualified"] += 1
-        logger.info("qualify %s | %s | score %s | pay %s", job.company, job.title, decision.score, compensation_label(job))
+        logger.info("qualify %s | %s | score %s | pay %s | queued", job.company, job.title, decision.score, compensation_label(job))
+        store.upsert(make_record(job, decision.score, ApplyResult("queued", "Waiting to apply.", "", True, False)))
         if opened or session.is_open():
-            if len(queue) < QUEUE_LIMIT:
-                queue.append((job, decision.score))
+            queue.append((job, decision.score))
             continue
         opened = True
         _fill(home, job, decision.score, profile, session, numbers, reasons, failures, warnings, queue, stop)
@@ -270,16 +302,41 @@ def _otp(home: Path, started):
     return reader
 
 
+def _log_attempt(job: Job, result: ApplyResult, resume: str) -> None:
+    url = safe_http_url(job.apply_url or job.url)
+    if result.status == "submitted":
+        logger.info("submitted %s | %s | %s | resume %s | %s", job.company, job.title, url, resume or "none", result.result)
+        return
+    logger.info(
+        "not submitted %s | %s | %s | %s | %s",
+        result.status,
+        job.company,
+        job.title,
+        url,
+        result.reason or result.result or "no reason recorded",
+    )
+
+
 def _fill(home, job, score, profile, session, numbers, reasons, failures, warnings, queue, stop) -> None:
     if stop.is_set():
         return
     secrets = load_secrets(home)
+    settings = load_settings(home)
+    manual = bool(settings.manual_review)
     store = Store(home)
-    preview = make_record(job, score, ApplyResult("applying", blocks_retry=True))
+    preview = make_record(job, score, ApplyResult("applying", "Opening the application.", "", True, False))
+    resume = Path(profile.cv_path).name if profile.cv_path else ""
+    preview["resume"] = resume
     store.upsert(preview)
     shot = home / "reviews" / f"{preview['id']}.png"
     started = datetime.now(timezone.utc)
-    write_state(home, search_status="running", status_line=f"Filling {job.company} — {job.title}.", current=_current_view(preview), queue_size=len(queue))
+    write_state(
+        home,
+        search_status="running",
+        status_line=f"Applying to {job.company} — {job.title}.",
+        current=_current_view(preview),
+        queue_size=len(queue),
+    )
     try:
         result = open_application(
             job,
@@ -290,19 +347,24 @@ def _fill(home, job, score, profile, session, numbers, reasons, failures, warnin
             default_headless(),
             shot,
             session,
+            preview=manual,
         )
     except Exception as exc:
         logger.error("apply error: %s", safe_error(exc))
         result = ApplyResult("needs_user", "", "The browser stopped unexpectedly. Nothing was submitted.", True, False)
     record = make_record(job, score, result)
     record["id"] = preview["id"]
+    record["resume"] = resume
+    if result.status == "submitted":
+        record["submitted_at"] = datetime.now(timezone.utc).isoformat()
     store.upsert(record)
-    if result.status == "filled":
+    if result.status == "filled" and manual:
+        _log_attempt(job, result, resume)
         numbers["filled"] += 1
         write_state(
             home,
             search_status="paused",
-            status_line="Form filled. Review it, then Submit or Skip. Search continues for the next jobs.",
+            status_line="Review mode: the form is filled and waiting for Submit or Skip.",
             current=_current_view(record),
             **_counts(
                 numbers["found"], numbers["rejected"], numbers["qualified"], numbers["needs_review"],
@@ -311,18 +373,40 @@ def _fill(home, job, score, profile, session, numbers, reasons, failures, warnin
             ),
         )
         return
+    if result.status == "filled":
+        result = ApplyResult(
+            "needs_user",
+            "",
+            "The form was filled but submission was not confirmed.",
+            True,
+            False,
+            filled=result.filled,
+            answered=result.answered,
+            needs_input=result.needs_input,
+        )
+        record = make_record(job, score, result)
+        record["id"] = preview["id"]
+        record["resume"] = resume
+        store.upsert(record)
+    _log_attempt(job, result, resume)
     if result.status == "submitted":
+        numbers["filled"] += 1
         numbers["submitted"] += 1
+        line = f"Submitted {job.company} — {job.title}. Next qualified job is next."
+    elif result.status == "skipped":
+        numbers["skipped"] += 1
+        line = f"Skipped {job.company}: {result.reason}"
     elif result.status == "failed":
         numbers["failed"] += 1
         failures.append({"company": job.company, "role": job.title, "reason": result.reason})
+        line = f"Failed {job.company}: {result.reason}"
     else:
         numbers["needs_review"] += 1
-    logger.info("%s %s | %s | %s", result.status, job.company, job.title, result.reason)
+        line = f"Needs review {job.company}: {result.reason}"
     write_state(
         home,
         search_status="running",
-        status_line="Searching public listings.",
+        status_line=line,
         current=None,
         **_counts(
             numbers["found"], numbers["rejected"], numbers["qualified"], numbers["needs_review"],
@@ -367,9 +451,11 @@ class AgentService:
             self.wake.clear()
             self.action.clear()
             self.queue.clear()
+            self.queue.extend(load_queued(self.home))
             self.cursor[0] = 0
             for key in self.totals:
                 self.totals[key] = 0
+            self.totals["qualified"] = len(self.queue)
             self._thread = threading.Thread(target=self._loop, name="job-agent", daemon=True)
             self._thread.start()
 

@@ -35,6 +35,8 @@ if (root) {
     document.getElementById("status-line").textContent = data.status_line || "";
     document.getElementById("search-status").textContent = data.search_status || "stopped";
     document.getElementById("found").textContent = data.found;
+    const queueNode = document.getElementById("queue-size");
+    if (queueNode) queueNode.textContent = data.queue_size || 0;
     document.getElementById("qualified").textContent = data.qualified || 0;
     document.getElementById("needs-review").textContent = data.needs_review || 0;
     document.getElementById("filled").textContent = data.filled || 0;
@@ -61,6 +63,11 @@ if (root) {
       ? `<h2>Why listings were skipped</h2><ul>${reasons.map(([reason, count]) => `<li>${esc(reason)}: ${esc(count)}</li>`).join("")}</ul>`
       : "");
 
+    const attempts = data.attempts || [];
+    setHtml("attempts", attempts.length
+      ? `<h2>Recent application attempts</h2><ul>${attempts.map((item) => `<li>${esc(item.company)} — ${esc(item.role)} — ${esc(item.status)}${item.reason ? ` — ${esc(item.reason)}` : ""}</li>`).join("")}</ul>`
+      : "");
+
     const failures = data.failures || [];
     setHtml("failures", failures.length
       ? `<h2>Failed this run</h2><ul>${failures.map((item) => `<li>${esc(item.company)} — ${esc(item.role)} — ${esc(item.reason)}</li>`).join("")}</ul>`
@@ -83,9 +90,9 @@ if (root) {
       ? rows.map((row) => {
           const href = safeUrl(row.url);
           const link = href ? `<a href="${href}" rel="noopener noreferrer">${href}</a>` : "";
-          return `<tr><td>${esc(row.company)}</td><td>${esc(row.role)}</td><td>${esc(row.date)}</td><td>${link}</td><td>${esc(row.match_score)}</td><td>${esc(row.status)}</td></tr>`;
+          return `<tr><td>${esc(row.company)}</td><td>${esc(row.role)}</td><td>${esc(row.date)}</td><td>${link}</td><td>${esc(row.match_score)}</td><td>${esc(row.resume || "")}</td><td>${esc(row.status)}</td></tr>`;
         }).join("")
-      : `<tr><td colspan="6">No applications submitted yet.</td></tr>`;
+      : `<tr><td colspan="7">No applications submitted yet.</td></tr>`;
     setHtml("applications", body);
   }
 

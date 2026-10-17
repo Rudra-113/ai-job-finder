@@ -1,6 +1,8 @@
 import json
 import re
 
+import pytest
+
 from app import bind_host, create_app
 from jobagent.models import ApplyResult
 from jobagent.profile import save_profile
@@ -33,6 +35,7 @@ def test_pages_and_csrf_and_host(tmp_path):
     assert b"Minimum stipend" in page.data
     assert b"Minimum match score" in page.data
     assert b"Start continuous search" in page.data
+    assert b"Automatic mode is on" in page.data
     assert b"Found" in page.data
     assert b"Qualified" in page.data
     assert b"Submit" in page.data
@@ -126,6 +129,119 @@ def test_cycle_applies_once_and_skips_the_rest(tmp_path, monkeypatch):
     calls.clear()
     run_cycle(home)
     assert calls == []
+
+
+def test_every_qualified_job_is_attempted(tmp_path, monkeypatch):
+    home = tmp_path
+    save_profile(home, strong_profile(home))
+    save_settings(home, strong_settings())
+    jobs = [
+        strong_job(company=f"Co{index}", url=f"https://jobs.example.com/c{index}", apply_url=f"https://jobs.example.com/c{index}")
+        for index in range(5)
+    ]
+    seen = []
+
+    def fake_apply(job, *_args, **_kwargs):
+        seen.append(job.company)
+        if job.company == "Co1":
+            return ApplyResult("needs_user", "", "A CAPTCHA or human check appeared. This application was not submitted.", True, False)
+        if job.company == "Co2":
+            return ApplyResult("failed", "", "Could not find an application form on this page.", True, False)
+        return ApplyResult("submitted", "The site confirmed the application.", "", True, True)
+
+    served = {"done": False}
+
+    def search(_settings, _queries=None):
+        if served["done"]:
+            return [], []
+        served["done"] = True
+        return jobs, []
+
+    monkeypatch.setattr("jobagent.runner.search_jobs", search)
+    monkeypatch.setattr("jobagent.runner.open_application", fake_apply)
+    queue = []
+    cursor = [0]
+    totals = {
+        "found": 0,
+        "rejected": 0,
+        "qualified": 0,
+        "needs_review": 0,
+        "filled": 0,
+        "submitted": 0,
+        "skipped": 0,
+        "failed": 0,
+    }
+    for _ in range(5):
+        run_cycle(home, queue=queue, cursor=cursor, totals=totals)
+    assert seen == ["Co0", "Co1", "Co2", "Co3", "Co4"]
+    assert queue == []
+    state = json.loads((home / "state.json").read_text(encoding="utf-8"))
+    assert state["qualified"] == 5
+    assert state["submitted"] == 3
+    assert state["needs_review"] == 1
+    assert state["failed"] == 1
+    records = json.loads((home / "applications.json").read_text(encoding="utf-8"))
+    submitted = next(row for row in records if row["company"] == "Co0")
+    assert submitted["status"] == "submitted"
+    assert submitted["submitted_at"]
+    assert submitted["resume"] == "cv.txt"
+    assert submitted["match_score"] >= 70
+
+
+def test_runner_submits_a_local_form_then_records_the_captcha(tmp_path, monkeypatch):
+    pytest.importorskip("playwright.sync_api")
+    monkeypatch.setenv("JOBAGENT_HEADLESS", "1")
+    from tests.test_apply import CAPTCHA, FORM, serve
+
+    home = tmp_path
+    save_profile(home, strong_profile(home))
+    save_settings(home, strong_settings())
+    ready = serve(FORM)
+    blocked = serve(CAPTCHA)
+    good_url = f"http://127.0.0.1:{ready.server_address[1]}/job"
+    bad_url = f"http://127.0.0.1:{blocked.server_address[1]}/job"
+    good = strong_job(company="Northwind", url=good_url, apply_url=good_url)
+    bad = strong_job(company="Blocked", url=bad_url, apply_url=bad_url)
+    served = {"done": False}
+
+    def search(_settings, _queries=None):
+        if served["done"]:
+            return [], []
+        served["done"] = True
+        return [good, bad], []
+
+    monkeypatch.setattr("jobagent.runner.search_jobs", search)
+    queue = []
+    cursor = [0]
+    totals = {
+        "found": 0,
+        "rejected": 0,
+        "qualified": 0,
+        "needs_review": 0,
+        "filled": 0,
+        "submitted": 0,
+        "skipped": 0,
+        "failed": 0,
+    }
+    try:
+        run_cycle(home, queue=queue, cursor=cursor, totals=totals)
+        run_cycle(home, queue=queue, cursor=cursor, totals=totals)
+    finally:
+        ready.shutdown()
+        ready.server_close()
+        blocked.shutdown()
+        blocked.server_close()
+    assert ready.posts
+    assert blocked.posts == []
+    records = json.loads((home / "applications.json").read_text(encoding="utf-8"))
+    by_company = {row["company"]: row for row in records}
+    assert by_company["Northwind"]["status"] == "submitted"
+    assert by_company["Northwind"]["submitted_at"]
+    assert by_company["Northwind"]["resume"] == "cv.txt"
+    assert by_company["Northwind"]["match_score"] >= 70
+    assert by_company["Blocked"]["status"] == "needs_user"
+    assert "captcha" in by_company["Blocked"]["reason"].lower()
+    assert queue == []
 
 
 def test_cycle_does_not_search_without_a_profile(tmp_path, monkeypatch):
