@@ -60,7 +60,7 @@
   <div class="grid">
     {% for card in opportunities %}
     <article class="opportunity">
-      <p class="match">{{ card.match_score }}% match</p>
+      <p class="match" style="--score: {{ card.match_score }}">{{ card.match_score }}% match</p>
       <h3>{{ card.role }}</h3>
       <p>{{ card.company }}</p>
       <p class="meta">{{ card.work_mode }} · {{ card.location or "Location not stated" }}</p>

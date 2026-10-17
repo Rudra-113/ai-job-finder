@@ -84,18 +84,13 @@ If nothing clears every filter, the page shows the closest same-sector roles tha
 
 Missing pay is kept and shown as compensation not disclosed. Unpaid roles are skipped. A stated stipend below your minimum is skipped unless it is shown as a closest match. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
 
-## Gmail, for one-time codes only
+## Sign in with Google
 
-The agent never asks for your Gmail password. Connect it only if applications email you a code.
+Continue with Google uses the desktop client in `data\gmail_client_secret.json`, or `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. The app asks Google for your name, email, and account id. It does not ask for your Gmail password, and it does not read your mailbox.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a project.
-2. Enable the Gmail API.
-3. Set the OAuth consent screen to **External** and **Testing**. Add your own Gmail address as a test user.
-4. Create an OAuth client of type **Desktop app** and download the JSON file.
-5. On Profile, choose that file and click **Save profile**.
-6. Click **Connect Gmail**. A browser window opens. Sign in and allow read-only access.
+A desktop client can only return to this computer, at `http://127.0.0.1:47321/auth/google/callback`. On that address, sign-in finishes by itself. On the temporary public link, Google still returns to this computer. If that page does not open the app, copy the address bar and paste it into **Google return address**.
 
-The token stays in the `data` folder on this computer. It is used only after an application asks for a one-time code. The search looks at up to five recent messages that match code keywords, optionally from that employer's domain, and reads the body of the newest matching message. It does not read the rest of the inbox.
+If that Gmail address matches the email already saved on this computer, you land in that profile.
 
 ## Answer API
 

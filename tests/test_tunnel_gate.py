@@ -15,7 +15,12 @@ class Upstream(BaseHTTPRequestHandler):
         self._reply()
 
     def _reply(self):
-        body = f"host={self.headers.get('Host')}\nauth={self.headers.get('Authorization')}\n".encode()
+        body = (
+            f"host={self.headers.get('Host')}\n"
+            f"auth={self.headers.get('Authorization')}\n"
+            f"forwarded={self.headers.get('X-Forwarded-Host')}\n"
+            f"proto={self.headers.get('X-Forwarded-Proto')}\n"
+        ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(body)))
@@ -65,6 +70,17 @@ def test_gate_requires_password_and_rewrites_host():
         text = response.read().decode()
     assert f"host=127.0.0.1:{upstream.server_address[1]}" in text
     assert "auth=None" in text
+    public = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": _basic(USERNAME, "long-enough-password"),
+            "X-Forwarded-Host": "example.trycloudflare.com",
+        },
+    )
+    with urllib.request.urlopen(public, timeout=3) as response:
+        forwarded = response.read().decode()
+    assert "forwarded=example.trycloudflare.com" in forwarded
+    assert "proto=https" in forwarded
     assert upstream.body == b"hello"
     blocked = urllib.request.Request(
         f"http://127.0.0.1:{gate.server_address[1]}/data/gmail_token.json",

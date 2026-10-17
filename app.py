@@ -5,12 +5,14 @@ from __future__ import annotations
 import os
 import secrets
 import shutil
+import time
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 
-from jobagent.accounts import user_home
-from jobagent.auth_google import authorization_url, exchange_identity, google_ready
+from jobagent.accounts import user_home, workspace_id
+from jobagent.auth_google import authorization_url, exchange_identity, google_ready, loopback_return, sign_in_redirect
 from jobagent.history import find_search, load_history
 from jobagent.logsetup import configure
 from jobagent.paths import default_home, load_secret_key
@@ -23,7 +25,17 @@ from jobagent.textutil import safe_http_url
 ROOT = Path(__file__).resolve().parent
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 CV_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
-PUBLIC_PATHS = {"/", "/auth", "/auth/google", "/auth/google/callback", "/auth/local", "/privacy", "/terms"}
+PUBLIC_PATHS = {
+    "/",
+    "/auth",
+    "/auth/google",
+    "/auth/google/callback",
+    "/auth/google/finish",
+    "/auth/google/complete",
+    "/auth/local",
+    "/privacy",
+    "/terms",
+}
 
 
 def bind_host() -> str:
@@ -100,24 +112,82 @@ def create_app(home: Path | None = None) -> Flask:
             return redirect(url_for("dashboard"))
         return render_template("landing.html", title="AI Job Finder", active="home")
 
+    def _oauth_box() -> dict:
+        return app.extensions.setdefault("oauth_pending", {})
+
+    def _remember_oauth(state: str, redirect_uri: str, return_to: str) -> None:
+        now = time.time()
+        pending = _oauth_box()
+        for key, row in list(pending.items()):
+            if now - float(row.get("created") or 0) > 600:
+                pending.pop(key, None)
+        pending[state] = {"redirect_uri": redirect_uri, "return_to": return_to, "created": now}
+
+    def _pending_oauth(state: str) -> dict | None:
+        row = _oauth_box().get(state)
+        if not row:
+            return None
+        if time.time() - float(row.get("created") or 0) > 600:
+            _oauth_box().pop(state, None)
+            return None
+        return row
+
+    def _drop_oauth(state: str) -> None:
+        _oauth_box().pop(state, None)
+
+    def _remember_ticket(identity: dict) -> str:
+        ticket = secrets.token_urlsafe(24)
+        now = time.time()
+        tickets = app.extensions.setdefault("oauth_tickets", {})
+        for key, row in list(tickets.items()):
+            if now - float(row.get("created") or 0) > 120:
+                tickets.pop(key, None)
+        tickets[ticket] = {"identity": identity, "created": now}
+        return ticket
+
+    def _take_ticket(ticket: str) -> dict | None:
+        row = app.extensions.setdefault("oauth_tickets", {}).pop(ticket, None)
+        if not row or time.time() - float(row.get("created") or 0) > 120:
+            return None
+        identity = row.get("identity")
+        return identity if isinstance(identity, dict) else None
+
+    def _listen_port() -> int:
+        host = request.host or ""
+        if ":" in host:
+            try:
+                return int(host.rsplit(":", 1)[1])
+            except ValueError:
+                pass
+        try:
+            return int(os.environ.get("JOBAGENT_PORT", "47321"))
+        except ValueError:
+            return 47321
+
+    def _public_sign_in() -> bool:
+        host = urlsplit(base_url()).hostname or ""
+        return host.endswith("trycloudflare.com")
+
     @app.get("/auth")
     def auth_page():
         if signed_in():
             return redirect(url_for("dashboard"))
+        ready = google_ready(root_home())
         return render_template(
             "auth.html",
             title="Sign in",
             active="auth",
-            google_ready=google_ready(root_home()),
+            google_ready=ready,
+            remote_auth=ready and _public_sign_in(),
             flash=pop_flash(),
         )
 
     @app.get("/auth/google")
     def google_start():
         if not google_ready(root_home()):
-            set_flash("Google sign-in needs a web OAuth client on this computer.")
+            set_flash("Add the Gmail OAuth client file on this computer, then try Google sign-in again.")
             return redirect(url_for("auth_page"))
-        redirect_uri = base_url() + "/auth/google/callback"
+        redirect_uri = sign_in_redirect(root_home(), base_url(), _listen_port())
         try:
             url, state = authorization_url(root_home(), redirect_uri)
         except Exception:
@@ -125,38 +195,85 @@ def create_app(home: Path | None = None) -> Flask:
             return redirect(url_for("auth_page"))
         session["oauth_state"] = state
         session["oauth_redirect"] = redirect_uri
+        _remember_oauth(state, redirect_uri, base_url())
         return redirect(url)
+
+    def _identity_from_return(redirect_uri: str, returned: str) -> dict:
+        return exchange_identity(root_home(), redirect_uri, returned)
 
     @app.get("/auth/google/callback")
     def google_callback():
-        expected = session.get("oauth_state") or ""
-        if not expected or request.args.get("state") != expected:
-            set_flash("The Google sign-in expired. Try again.")
-            return redirect(url_for("auth_page"))
         if request.args.get("error"):
             set_flash("Google sign-in was cancelled.")
             return redirect(url_for("auth_page"))
-        redirect_uri = session.get("oauth_redirect") or (base_url() + "/auth/google/callback")
+        state = request.args.get("state") or ""
+        expected = session.get("oauth_state") or ""
+        pending = _pending_oauth(state)
+        if not state or (state != expected and not pending):
+            set_flash("The Google sign-in expired. Try again.")
+            return redirect(url_for("auth_page"))
+        redirect_uri = session.get("oauth_redirect") or (pending or {}).get("redirect_uri") or sign_in_redirect(root_home(), base_url(), _listen_port())
         returned = base_url() + request.full_path
         try:
-            identity = exchange_identity(root_home(), redirect_uri, returned)
+            identity = _identity_from_return(redirect_uri, returned)
         except Exception:
             set_flash("Google did not complete sign-in. Nothing was stored.")
             return redirect(url_for("auth_page"))
+        _drop_oauth(state)
+        session.pop("oauth_state", None)
+        session.pop("oauth_redirect", None)
+        return_to = (pending or {}).get("return_to") or ""
+        if state != expected and return_to and return_to != base_url():
+            ticket = _remember_ticket(identity)
+            return redirect(f"{return_to}/auth/google/complete?ticket={ticket}")
+        _start_session(identity["sub"], identity["name"], identity["email"])
+        return redirect(url_for("dashboard"))
+
+    @app.post("/auth/google/finish")
+    def google_finish():
+        returned = (request.form.get("returned") or "").strip()
+        if not loopback_return(returned):
+            set_flash("Paste the full address from the page Google opened, starting with http://127.0.0.1.")
+            return redirect(url_for("auth_page"))
+        query = parse_qs(urlsplit(returned).query)
+        state = (query.get("state") or [""])[0]
+        expected = session.get("oauth_state") or ""
+        pending = _pending_oauth(state)
+        if not state or (state != expected and not pending):
+            set_flash("That Google sign-in has expired. Start it again.")
+            return redirect(url_for("auth_page"))
+        if query.get("error"):
+            set_flash("Google sign-in was cancelled.")
+            return redirect(url_for("auth_page"))
+        redirect_uri = session.get("oauth_redirect") or (pending or {}).get("redirect_uri") or ""
+        try:
+            identity = _identity_from_return(redirect_uri, returned)
+        except Exception:
+            set_flash("Google did not complete sign-in. Nothing was stored.")
+            return redirect(url_for("auth_page"))
+        _drop_oauth(state)
         session.pop("oauth_state", None)
         session.pop("oauth_redirect", None)
         _start_session(identity["sub"], identity["name"], identity["email"])
         return redirect(url_for("dashboard"))
 
+    @app.get("/auth/google/complete")
+    def google_complete():
+        identity = _take_ticket(request.args.get("ticket") or "")
+        if not identity:
+            set_flash("That Google sign-in has expired. Start it again.")
+            return redirect(url_for("auth_page"))
+        _start_session(str(identity.get("sub") or ""), str(identity.get("name") or ""), str(identity.get("email") or ""))
+        return redirect(url_for("dashboard"))
+
     @app.post("/auth/local")
     def local_sign_in():
-        if google_ready(root_home()):
-            set_flash("Use Continue with Google.")
-            return redirect(url_for("auth_page"))
         _start_session("local", "Workspace", "")
         return redirect(url_for("dashboard"))
 
     def _start_session(user_id: str, name: str, email: str) -> None:
+        if user_id != "local":
+            user_id = workspace_id(root_home(), email, user_id)
         session["user_id"] = user_id
         session["user_name"] = name
         session["user_email"] = email

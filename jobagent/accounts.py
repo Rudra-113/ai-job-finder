@@ -11,6 +11,17 @@ def safe_user_id(user_id: str) -> str:
     return cleaned or "unknown"
 
 
+def workspace_id(root: Path, email: str, sub: str) -> str:
+    """A Gmail address that matches the saved profile opens that profile."""
+    from jobagent.profile import load_profile
+
+    wanted = (email or "").strip().casefold()
+    saved = load_profile(root).email.strip().casefold()
+    if wanted and saved and wanted == saved:
+        return "local"
+    return sub
+
+
 def user_home(root: Path, user_id: str) -> Path:
     """The original computer workspace stays at the data root. Other people get a private folder."""
     if user_id == "local":

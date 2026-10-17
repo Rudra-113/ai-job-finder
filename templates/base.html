@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <div class="aurora" aria-hidden="true"></div>
   <header>
     <a class="brand" href="{{ url_for('dashboard') if logged_in else url_for('landing') }}">AI Job Finder</a>
     <nav>

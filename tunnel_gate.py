@@ -44,6 +44,19 @@ _BLOCKED = (
 )
 
 
+def _public_host(headers) -> str:
+    """Keep the public tunnel name when the proxy already recorded it."""
+    incoming = ""
+    for key, value in headers.items():
+        if key.lower() == "x-forwarded-host" and "trycloudflare.com" in (value or ""):
+            incoming = value.split(",")[0].strip()
+            break
+    host = (headers.get("Host") or "").split(",")[0].strip()
+    if "trycloudflare.com" in host:
+        return host
+    return incoming or host
+
+
 def _blocked(path: str) -> bool:
     name = (path or "").split("?", 1)[0].casefold()
     return any(part in name for part in _BLOCKED)
@@ -151,12 +164,12 @@ class GateHandler(BaseHTTPRequestHandler):
         headers = {
             key: value
             for key, value in self.headers.items()
-            if key.lower() not in _HOP
+            if key.lower() not in _HOP and key.lower() not in {"x-forwarded-host", "x-forwarded-proto"}
         }
-        original_host = self.headers.get("Host", "")
+        public_host = _public_host(self.headers)
         headers["Host"] = f"{GATE_HOST}:{self.server.upstream_port}"
-        headers["X-Forwarded-Host"] = original_host
-        headers["X-Forwarded-Proto"] = "https" if "trycloudflare.com" in original_host else "http"
+        headers["X-Forwarded-Host"] = public_host
+        headers["X-Forwarded-Proto"] = "https" if "trycloudflare.com" in public_host else "http"
         headers["Connection"] = "close"
         try:
             upstream = http.client.HTTPConnection(GATE_HOST, self.server.upstream_port, timeout=120)
