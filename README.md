@@ -1,185 +1,67 @@
-# Job Agent
+# AI Job Finder
 
-AI Job & Internship Finder runs on your computer. You sign in, upload a resume, and describe the roles you want. It searches public listings, checks which ones still look open, and ranks the best matches. **Apply on official site** opens the employer's page in a new tab. This app does not fill or submit applications.
+> An AI-powered job and internship discovery platform that analyzes your resume, understands your preferences, searches multiple sources, and ranks the opportunities that best match your profile.
 
-The page listens on [http://127.0.0.1:47321](http://127.0.0.1:47321). It does not accept connections from other computers.
+<p align="center">
 
-## What you need
+**Find the right opportunities without manually searching dozens of job boards.**
 
-- Windows 10 or 11
-- Python 3.11 or newer from [python.org](https://www.python.org/downloads/). During setup, check **Add python.exe to PATH**.
-- A text-based CV: PDF, DOCX, TXT, or MD. A scanned PDF has no readable text, so scoring will be weak until you add skills and experience on the Profile page.
-- Optional: an OpenAI or xAI API key, for application questions your saved facts do not already answer.
-- Optional: a Google Cloud desktop OAuth client, if you want the agent to read a one-time email code.
+</p>
 
-## Run
+---
 
-Double-click `run.bat`, or open Command Prompt in this folder and run:
+## 🚀 Overview
 
-```bat
-py -3 -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m playwright install chromium
-.venv\Scripts\python app.py
-```
+**AI Job Finder** is an open-source platform designed to simplify the job and internship discovery process.
 
-Then open [http://127.0.0.1:47321](http://127.0.0.1:47321).
+Instead of manually searching multiple job portals, comparing hundreds of listings, and checking whether each opportunity matches your profile, AI Job Finder analyzes your resume and preferences and helps you discover the most relevant opportunities.
 
-Leave that window open. Closing it stops the agent. To stop a search first, click **Stop** on the Search page, then close the window.
+The system is designed around three principles:
 
-The first run may download Chromium into your user profile. The published site does not use it to fill or submit applications.
+- **Personalized** — recommendations are based on your actual resume and preferences.
+- **Multi-source** — opportunities can be collected from multiple job platforms and company career pages.
+- **Transparent** — every recommendation shows why it matches your profile and provides a direct application link.
 
-## Set it up
+> AI Job Finder is a job discovery and recommendation platform. Applications are completed by the user on the employer's official website.
 
-### 1. Profile
+---
 
-Open **Profile** and save:
+## ✨ Features
 
-- Full name (first and last), email, phone, city, and country
-- Portfolio, LinkedIn, and GitHub URLs when you have them
-- Work authorization and visa sponsorship. Leave these blank only if you want those questions to pause the application.
-- Skills, education, experience, and projects, written as they are true
-- Extra facts, one per line, as `Label: value`. Example: `Notice period: 4 weeks`
-- Your CV file
+### 🧠 AI Resume Analysis
 
-Education is one school per line: `Degree | Field | School | End`
+Upload your resume and automatically extract relevant information such as:
 
-Experience is one role per line: `Title | Company | Start | End | What you did`
+- Education
+- Skills
+- Programming languages
+- Frameworks
+- Certifications
+- Projects
+- Experience
+- Internship experience
+- Preferred domains
 
-Dates are `YYYY-MM`. Use `present` if you still work there.
+The extracted profile can be reviewed and edited by the user.
 
-Search will not start until a full name, a valid email, and a CV are saved. The CV must contain readable text, or you must add skills or experience.
+---
 
-### 2. Settings
+### 🎯 Personalized Job Matching
 
-Open **Settings** and save every rule the agent must follow:
+AI compares your profile against job requirements and generates a relevance score.
 
-- Target sector
-- Target roles
-- Required skills
-- Location
-- Remote, onsite, hybrid, or any
-- Minimum stipend, as a monthly amount
-- Preferred companies
-- Excluded companies
-- Minimum match score, from 0 to 100
-- Number of opportunities to return after ranking
-- Internship, full-time, or any
-- Experience level
-- Skip mandatory video applications
-- Require disclosed compensation, off by default so an unstated stipend stays in the list
-- Review before submit, off by default
+Example:
 
-A listing outside these rules is skipped. Preferred companies also have their public Greenhouse, Lever, and Ashby career pages checked. They are not a closed list: other companies can still match from the job boards. A company whose name contains an excluded name is never opened.
+```text
+94% Match
 
-### 3. Start
+✓ Python
+✓ Networking
+✓ Linux
+✓ Cybersecurity
+✓ Relevant projects
 
-On **Search**, describe what you want, set how many opportunities to return, and click **Search**. Example: “Find me 20 remote cybersecurity internships in India, minimum ₹10000 stipend, preferably SOC or security research.”
-
-The search reads every source it can, combines the listings, drops closed ones, removes duplicates, and scores the rest against your resume. The number you enter is how many final opportunities to show.
-
-**View details** opens the match explanation. Every result shows the listing’s own application URL and an **Apply** button. That button opens the page in a new tab. You apply there yourself. When the company careers link is verified, the button reads **Apply on official site**.
-
-If nothing clears every filter, the page shows the closest same-sector roles that missed only on match score or stated pay. Each of those still has a direct application link. Unpaid roles, fee requests, the wrong sector, and the wrong workplace stay hidden.
-
-Missing pay is kept and shown as compensation not disclosed. Unpaid roles are skipped. A stated stipend below your minimum is skipped unless it is shown as a closest match. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
-
-## Sign in with Google
-
-Continue with Google uses the desktop client in `data\gmail_client_secret.json`, or `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. The app asks Google for your name, email, and account id. It does not ask for your Gmail password, and it does not read your mailbox.
-
-A desktop client can only return to this computer, at `http://127.0.0.1:47321/auth/google/callback`. On that address, sign-in finishes by itself. On the temporary public link, Google still returns to this computer. If that page does not open the app, copy the address bar and paste it into **Google return address**.
-
-If that Gmail address matches the email already saved on this computer, you land in that profile.
-
-## Answer API
-
-Most answers come from your Profile. An API key is used only for a required question that your saved facts do not cover. The answer is kept only when every cited phrase, number, and content word appears in your saved profile. Otherwise that application pauses.
-
-On Profile, set the base URL and model, paste the key, and save. Leave the key blank on later saves to keep it. Check **Remove saved API key** to delete it.
-
-- OpenAI: base `https://api.openai.com/v1`, and a model on your account such as `gpt-4o-mini`
-- Grok: base `https://api.x.ai/v1`, and the model name shown in your xAI account
-
-You can also copy `.env.example` to `.env` and fill the same values. The app reads `.env` when it starts. A variable already set in the environment is left as it is. A key saved on the Profile page is used ahead of both.
-
-## What it will not do
-
-- Invent qualifications, employers, dates, or skills
-- Apply outside the sector you entered
-- Apply to an unpaid role, or to a stated stipend below your minimum
-- Treat missing pay as a reason to skip the listing
-- Pay an application, training, or program fee
-- Bypass CAPTCHA, security checks, or login walls
-- Create accounts or store a password for a job site
-- Store your Gmail password, or read your whole inbox
-- Apply to the same job twice
-- Listen on a public address, or send your CV and profile anywhere except the application page and, if you added a key, the answer API
-
-## Limits
-
-- Closed listings and listings past their deadline are skipped. A missing posting date is not, by itself, a reason to skip
-- Search continues until you click Stop. One selected application is open at a time. There is no 30-minute wait
-- Hourly and weekly pay are counted only when the listing says full-time. The low end of a range is used. Currency is not converted
-- Workday and Taleo pages stop at the login wall
-- Duplicate protection lives in `data\applications.json`. Deleting that file allows the same job to be considered again
-
-Sources that expose a public listing feed are searched with several role phrases, including your own roles: Remotive, Remote OK, Arbeitnow, The Muse, Jobicy, Himalayas, LinkedIn's public guest listings, Internshala, Unstop's public internship search, Upwork's public RSS when it is readable, and Greenhouse, Lever, and Ashby pages for preferred companies. Indeed, Naukri, Foundit, Cutshort, Wellfound, and Upwork are recorded as unavailable when the public page is blocked. This agent does not bypass login, CAPTCHA, or anti-bot checks. It does not see every job on the internet, and it does not republish listings.
-
-## Files on this computer
-
-Everything private is in the `data` folder next to `app.py`:
-
-- `profile.json`, `settings.json`, `applications.json`, `secrets.json`
-- `cv\` for your CV
-- `gmail_client_secret.json` and `gmail_token.json`
-- `agent.log` with company, role, and status only
-- `reviews\` for a screenshot when an application needs you
-
-Keep this folder on your computer. It is not part of the program files you would share.
-
-## Temporary link from another computer
-
-The agent stays on this computer. A password gate on `127.0.0.1:47322` forwards to `127.0.0.1:47321` only after a sign-in. A Cloudflare Quick Tunnel publishes that gate, not a deployed copy of the app.
-
-Install cloudflared once. On Windows:
-
-```bat
-winget install --id Cloudflare.cloudflared
-```
-
-Start the agent first (`run.bat`). Then:
-
-```bat
-.venv\Scripts\python start_tunnel.py
-```
-
-The window prints the public `https://….trycloudflare.com` address, the username `jobagent`, and a password. The password is saved in `data\tunnel_password`. It is not your Gmail password. The browser asks for it before any page loads. Gmail tokens stay in `data` and are not served as files.
-
-On this computer, [http://127.0.0.1:47321](http://127.0.0.1:47321) stays open without that password.
-
-Close the tunnel:
-
-```bat
-.venv\Scripts\python stop_tunnel.py
-```
-
-You can also close the Command Prompt that is running `start_tunnel.py` only when you started cloudflared in that same window. `stop_tunnel.py` is the reliable way: it stops cloudflared and the password gate, and leaves the job agent running. The public URL stops working as soon as the tunnel process exits. Quick Tunnels are temporary; a new start prints a new URL.
-
-Traffic through the public URL passes Cloudflare. Close the tunnel when you are finished. Anyone who has the password can use the agent.
-
-## Tests
-
-```bat
-.venv\Scripts\python -m pytest
-```
-
-The tests use local sample forms. They do not submit applications to real employers.
-
-## If you are not on Windows
-
-The same steps work with `python3 -m venv .venv` and `.venv/bin/python`. On a machine with no display, the browser runs hidden. Set `JOBAGENT_HEADLESS=0` to show it when a display is available. Windows shows the browser unless `JOBAGENT_HEADLESS=1`.
-
-Flask is only the local page. The optional Cloudflare link is a temporary tunnel to the password gate, not a hosted copy of the app.
+Potential gap:
+△ SIEM experience preferred
 
 Launched from Trident Tech Labs.
