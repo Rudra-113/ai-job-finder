@@ -45,6 +45,7 @@ def default_state() -> dict:
         "active": 0,
         "duplicates": 0,
         "final_count": 0,
+        "relaxed": False,
         "warnings": [],
         "failures": [],
         "rejection_counts": {},
@@ -109,7 +110,12 @@ def run_cycle(home: Path, stop: threading.Event | None = None, query: str = "") 
         write_state(home, running=False, search_status="stopped", status_line="Stopped.", phase="", warnings=report.get("warnings") or [])
         return
     count = report["final_count"]
-    line = f"{count} best opportunities found." if count else "No matching opportunities in this search."
+    if report.get("relaxed") and count:
+        line = f"{count} closest opportunities, each with a direct application link. None cleared every filter."
+    elif count:
+        line = f"{count} best opportunities found."
+    else:
+        line = "No matching opportunities in this search."
     try:
         save_search(home, query or ", ".join(settings.roles), report)
     except OSError:
@@ -127,6 +133,7 @@ def run_cycle(home: Path, stop: threading.Event | None = None, query: str = "") 
         active=report["active"],
         duplicates=report["duplicates"],
         final_count=count,
+        relaxed=bool(report.get("relaxed")),
         found=report["found"],
         discovered=report.get("discovered") or report["found"],
         rejected=report["rejected"],

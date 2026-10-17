@@ -526,6 +526,7 @@ def _snapshot(home: Path) -> dict:
         "active": state.get("active") or 0,
         "duplicates": state.get("duplicates") or 0,
         "final_count": state.get("final_count") or 0,
+        "relaxed": bool(state.get("relaxed")),
     }
 
 

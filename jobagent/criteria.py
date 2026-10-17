@@ -49,11 +49,7 @@ def term_present(term: str, folded: str, original: str) -> bool:
     return re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", folded) is not None
 
 
-def sector_matches(job: Job, sectors: list[str]) -> bool:
-    if not sectors:
-        return False
-    original = "\n".join([job.title, job.location, job.category, " ".join(job.tags), job.description])
-    folded = original.casefold()
+def _sector_hit(sectors: list[str], folded: str, original: str) -> bool:
     for sector in sectors:
         phrase = sector.casefold().strip()
         for alias in _SECTOR_ALIASES.get(phrase, ()):
@@ -63,6 +59,21 @@ def sector_matches(job: Job, sectors: list[str]) -> bool:
         if terms and all(term_present(term, folded, original) for term in terms):
             return True
     return False
+
+
+def sector_matches(job: Job, sectors: list[str]) -> bool:
+    if not sectors:
+        return False
+    original = "\n".join([job.title, job.location, job.category, " ".join(job.tags), job.description])
+    return _sector_hit(sectors, original.casefold(), original)
+
+
+def sector_in_title(job: Job, sectors: list[str]) -> bool:
+    """True when the role title itself names the sector, not only a long description."""
+    if not sectors:
+        return False
+    original = f"{job.title} {job.category}"
+    return _sector_hit(sectors, original.casefold(), original)
 
 
 def token_in(token: str, hay: str) -> bool:

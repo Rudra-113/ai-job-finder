@@ -125,6 +125,85 @@ def test_resume_extract_does_not_invent_fields():
     assert "COBOL" not in extracted["skills"]
 
 
+def test_every_result_has_a_direct_apply_link(tmp_path):
+    linked = strong_job(
+        source="linkedin",
+        url="https://www.linkedin.com/jobs/view/55",
+        apply_url="https://www.linkedin.com/jobs/view/55",
+    )
+    low_pay = strong_job(
+        company="Quiet Labs",
+        url="https://www.linkedin.com/jobs/view/77",
+        apply_url="https://www.linkedin.com/jobs/view/77",
+        salary_min=100,
+        salary_text="Stipend 100 per month",
+        description="Remote data internship using Python and SQL. Stipend 100 per month.",
+    )
+    report = analyze_job_market(
+        strong_profile(tmp_path),
+        strong_settings(minimum_stipend=5000),
+        search=_search([linked, low_pay]),
+        fetcher=False,
+    )
+    assert report["final_count"] >= 1
+    for card in report["opportunities"]:
+        assert card["apply_url"].startswith("https://")
+        assert card["apply_label"]
+    companies = {card["company"] for card in report["opportunities"]}
+    assert "Northwind" in companies
+
+
+def test_closest_list_skips_roles_outside_the_title(tmp_path):
+    unrelated = strong_job(
+        company="Far Office",
+        title="Academic Dean",
+        employment="full-time",
+        url="https://jobs.example.com/dean",
+        apply_url="https://jobs.example.com/dean",
+        salary_min=100,
+        salary_text="Stipend 100 per month",
+        description="Remote role. Information security awareness is mentioned. Stipend 100 per month.",
+        category="Education",
+    )
+    intern = strong_job(
+        company="Northwind Security",
+        title="Cyber Security Intern",
+        url="https://jobs.example.com/cyber-intern",
+        apply_url="https://jobs.example.com/cyber-intern",
+        salary_min=100,
+        salary_text="Stipend 100 per month",
+        description="Remote cyber security internship. Stipend 100 per month.",
+        category="Cybersecurity",
+    )
+    report = analyze_job_market(
+        strong_profile(tmp_path),
+        strong_settings(sectors=["Cybersecurity"], roles=["Cybersecurity Intern"], employment="intern", minimum_stipend=5000, minimum_score=80),
+        search=_search([unrelated, intern]),
+        fetcher=False,
+    )
+    companies = {card["company"] for card in report["opportunities"]}
+    assert "Far Office" not in companies
+    assert "Northwind Security" in companies
+    assert report["opportunities"][0]["apply_url"] == "https://jobs.example.com/cyber-intern"
+
+
+def test_closest_roles_still_include_an_apply_link(tmp_path):
+    low_pay = strong_job(
+        salary_min=100,
+        salary_text="Stipend 100 per month",
+        description="Remote data internship using Python and SQL. Stipend 100 per month.",
+    )
+    report = analyze_job_market(
+        strong_profile(tmp_path),
+        strong_settings(minimum_stipend=5000),
+        search=_search([low_pay]),
+        fetcher=False,
+    )
+    assert report["relaxed"] is True
+    assert report["opportunities"][0]["apply_url"].startswith("https://")
+    assert report["opportunities"][0]["fit_note"] == "Below your minimum stipend"
+
+
 def test_why_matches_uses_only_profile_evidence(tmp_path):
     job = strong_job(description="Remote data internship using Python and SQL. COBOL is required. Stipend 3000 per month.")
     reasons = [item.casefold() for item in why_matches(job, strong_profile(tmp_path))]

@@ -15,7 +15,9 @@ if (root) {
     return "";
   }
   function render(data) {
-    document.getElementById("status-line").textContent = data.status_line || "";
+    const status = document.getElementById("status-line");
+    status.textContent = data.status_line || "";
+    status.classList.toggle("live", Boolean(data.running));
     const map = {
       discovered: data.discovered,
       analyzed: data.analyzed,
@@ -41,18 +43,21 @@ if (root) {
     const board = document.getElementById("opportunities");
     if (!board || data.running) return;
     const cards = data.opportunities || [];
-    board.innerHTML = cards.length ? `<h2>${esc(data.final_count)} best opportunities</h2><div class="grid">${cards.map((card) => {
-      const official = card.official_verified && safeUrl(card.official_url);
-      const listing = safeUrl(card.url);
-      const apply = official
-        ? `<a class="button-link" href="${official}" target="_blank" rel="noopener noreferrer">Apply on official site</a>`
-        : listing
-          ? `<a class="button-link" href="${listing}" target="_blank" rel="noopener noreferrer">View job</a><span class="hint">Official application link could not be verified.</span>`
-          : "";
+    const heading = data.relaxed ? "closest opportunities" : "best opportunities";
+    board.innerHTML = cards.length ? `<h2>${esc(data.final_count)} ${heading}</h2><div class="grid">${cards.map((card) => {
+      const href = safeUrl(card.apply_url || card.official_url || card.url);
+      const label = esc(card.apply_label || "Apply");
+      const link = href
+        ? `<p class="direct-link"><span>Apply here</span><a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a></p>`
+        : "";
+      const button = href
+        ? `<a class="button-link" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
+        : "";
       const why = (card.why || []).map((item) => `✓ ${esc(item)}`).join(" ");
       const gaps = (card.gaps || []).map((item) => `△ ${esc(item)}`).join(" ");
-      return `<article class="opportunity"><p class="match">${esc(card.match_score)}% match</p><h3>${esc(card.role)}</h3><p>${esc(card.company)}</p><p class="meta">${esc(card.work_mode)} · ${esc(card.location || "Location not stated")}</p><p>${esc(card.compensation)}</p><p class="meta">Posted ${esc(card.posted || "date not listed")} · ${esc(card.availability)}</p><p class="meta">Found on ${esc((card.sources || []).join(" · "))}</p>${why ? `<p class="why">Why it matches: ${why}</p>` : ""}${gaps ? `<p class="why">Potential gaps: ${gaps}</p>` : ""}<div class="button-row"><a class="button-link secondary" href="/opportunities/${esc(card.id)}">View details</a>${apply}</div></article>`;
-    }).join("")}</div>` : "";
+      const note = card.fit_note ? `<p class="badge warn">${esc(card.fit_note)}</p>` : "";
+      return `<article class="opportunity"><p class="match">${esc(card.match_score)}% match</p><h3>${esc(card.role)}</h3><p>${esc(card.company)}</p><p class="meta">${esc(card.work_mode)} · ${esc(card.location || "Location not stated")}</p><p>${esc(card.compensation)}</p><p class="meta">Posted ${esc(card.posted || "date not listed")} · ${esc(card.availability)}</p><p class="meta">Found on ${esc((card.sources || []).join(" · "))}</p>${note}${why ? `<p class="why">Why it matches: ${why}</p>` : ""}${gaps ? `<p class="why">Potential gaps: ${gaps}</p>` : ""}${link}<div class="button-row"><a class="button-link secondary" href="/opportunities/${esc(card.id)}">View details</a>${button}</div></article>`;
+    }).join("")}</div>` : `<div class="empty card"><h2>No opportunities on screen yet</h2><p>Run a search. Every result includes a direct application link you can open yourself.</p></div>`;
   }
   async function tick() {
     const response = await fetch("/api/status", { headers: { Accept: "application/json" } });

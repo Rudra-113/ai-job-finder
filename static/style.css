@@ -18,7 +18,10 @@
 body {
   margin: 0;
   font: 16px/1.5 "Segoe UI", system-ui, sans-serif;
-  background: var(--paper);
+  background:
+    radial-gradient(920px 420px at 8% -12%, rgba(15, 110, 86, 0.16), transparent 58%),
+    radial-gradient(680px 360px at 100% 0%, rgba(23, 32, 51, 0.07), transparent 52%),
+    var(--paper);
   color: var(--ink);
 }
 
@@ -75,7 +78,25 @@ footer { padding-bottom: 2rem; font-size: 0.92rem; }
   box-shadow: var(--shadow);
 }
 
-.hero { padding: 1.6rem; margin-bottom: 1.2rem; }
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.6rem;
+  margin-bottom: 1.2rem;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  right: -70px;
+  top: -80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(15, 110, 86, 0.22), transparent 68%);
+  animation: drift 7s ease-in-out infinite;
+  pointer-events: none;
+}
 
 .card, form.stack, .opportunity { padding: 1rem 1.1rem; }
 
@@ -218,7 +239,114 @@ ul.clean { padding-left: 1.1rem; }
   header { align-items: flex-start; flex-direction: column; }
 }
 
+.direct-link {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.7rem 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: var(--green-soft);
+  border: 1px solid #c9e6db;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+
+.direct-link span {
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--green-dark);
+}
+
+.direct-link a { font-weight: 650; }
+
+.lab { margin-top: 0.8rem; font-weight: 700; letter-spacing: 0.01em; color: var(--ink); }
+
+.lab-close {
+  margin-top: 1.4rem;
+  background: linear-gradient(145deg, #10243a 0%, #0f6e56 100%);
+  color: #f4fbf8;
+  border: 0;
+}
+
+.lab-close h2, .lab-close p { color: #f4fbf8; }
+
+.lab-close .chip { background: rgba(255, 255, 255, 0.16); color: white; }
+
+.empty { margin-top: 0.4rem; }
+
+.live::before {
+  content: "";
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 rgba(15, 110, 86, 0.45);
+  animation: pulse 1.3s ease infinite;
+  vertical-align: 0.05rem;
+}
+
+.hero, .opportunity, .stat, .card, .steps li {
+  animation: rise 0.6s ease backwards;
+}
+
+.opportunity, .card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.opportunity:hover, .card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(23, 32, 51, 0.1);
+  animation: none;
+}
+
+.stat:nth-child(2) { animation-delay: 0.05s; }
+.stat:nth-child(3) { animation-delay: 0.1s; }
+.stat:nth-child(4) { animation-delay: 0.15s; }
+.stat:nth-child(5) { animation-delay: 0.2s; }
+
+.grid .opportunity:nth-child(2), .grid .card:nth-child(2) { animation-delay: 0.08s; }
+.grid .opportunity:nth-child(3), .grid .card:nth-child(3) { animation-delay: 0.16s; }
+.grid .opportunity:nth-child(4), .grid .card:nth-child(4) { animation-delay: 0.24s; }
+
+button, .button-link { transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease; }
+
+button:hover, .button-link:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(15, 110, 86, 0.18); }
+
+.match { animation: pop 0.7s ease both; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(16px); }
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(15, 110, 86, 0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(15, 110, 86, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(15, 110, 86, 0); }
+}
+
 @media (max-width: 560px) {
   .stats, .grid.two, .grid.three { grid-template-columns: 1fr; }
   header, main, footer { width: min(100% - 1.25rem, 1080px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

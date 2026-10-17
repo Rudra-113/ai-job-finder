@@ -36,12 +36,16 @@
   {% else %}<p class="hint">Not stated.</p>{% endif %}
   <h2>Description</h2>
   <p>{{ card.description or "The listing did not include a description." }}</p>
+  <h2>Direct application link</h2>
+  {% if card.apply_url %}
+  <p class="direct-link"><span>Apply here</span><a href="{{ card.apply_url }}" target="_blank" rel="noopener noreferrer">{{ card.apply_url }}</a></p>
+  {% if not card.official_verified %}<p class="hint">This is the listing’s own application page. A separate company careers link was not verified.</p>{% endif %}
+  {% else %}
+  <p class="hint">This listing did not include an application link.</p>
+  {% endif %}
   <div class="button-row">
-    {% if card.official_verified and card.official_url %}
-    <a class="button-link" href="{{ card.official_url }}" target="_blank" rel="noopener noreferrer">Apply on official site</a>
-    {% elif card.url %}
-    <a class="button-link secondary" href="{{ card.url }}" target="_blank" rel="noopener noreferrer">View job</a>
-    <p class="hint">Official application link could not be verified.</p>
+    {% if card.apply_url %}
+    <a class="button-link" href="{{ card.apply_url }}" target="_blank" rel="noopener noreferrer">{{ card.apply_label or "Apply" }}</a>
     {% endif %}
     <a class="button-link secondary" href="{{ url_for('dashboard') }}">Back to results</a>
   </div>

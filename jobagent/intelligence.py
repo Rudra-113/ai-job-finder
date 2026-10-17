@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from jobagent.criteria import age_problem, compensation_label, infer_workplace, monthly_pay, stipend_problem
+from jobagent.criteria import age_problem, compensation_label, infer_workplace, monthly_pay, sector_in_title, sector_matches, stipend_problem, workplace_problem
 from jobagent.filters import screen
 from jobagent.matcher import evidence_text, potential_gaps, score_job
 from jobagent.models import Job
@@ -328,11 +328,12 @@ def job_facts(job: Job) -> dict:
     }
 
 
-def _card(job: Job, score: int, profile: Profile, status: str) -> dict:
-    url = safe_http_url(job.official_application_url or job.apply_url or job.url)
+def _card(job: Job, score: int, profile: Profile, status: str, fit_note: str = "") -> dict:
+    direct = safe_http_url(job.official_application_url or job.apply_url or job.url)
+    verified = bool(job.official_application_verified and safe_http_url(job.official_application_url or ""))
     facts = job_facts(job)
     return {
-        "id": _opportunity_id(url or job.url),
+        "id": _opportunity_id(direct or job.url),
         "company": job.company,
         "role": job.title,
         "match_score": score,
@@ -350,10 +351,13 @@ def _card(job: Job, score: int, profile: Profile, status: str) -> dict:
         "experience": facts["experience"],
         "deadline": facts["deadline"],
         "employment": facts["employment"],
-        "application": "Supported" if url else "No application link",
-        "official_url": url if job.official_application_verified else "",
-        "official_verified": bool(job.official_application_verified and url),
-        "url": url,
+        "application": "Supported" if direct else "No application link",
+        "official_url": direct if verified else "",
+        "official_verified": verified,
+        "apply_url": direct,
+        "apply_label": "Apply on official site" if verified else "Apply",
+        "fit_note": fit_note,
+        "url": direct,
         "source_url": safe_http_url(job.url),
         "description": (job.description or "")[:4000],
         "source": job.source,
@@ -393,13 +397,25 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
     step("Comparing with your resume...")
     rejected: dict[str, int] = {}
     ranked = []
+    nearest: list[tuple[int, Job, str]] = []
     for job in merged:
-        if stipend_problem(job, settings.minimum_stipend):
-            rejected["Pay"] = rejected.get("Pay", 0) + 1
-            continue
         decision = screen(job, settings, profile, lambda _job: False)
         if not decision.accept:
             rejected[decision.reason or "Rejected"] = rejected.get(decision.reason or "Rejected", 0) + 1
+            close = decision.reason in {"Match score below your minimum", "Pay is below your minimum"}
+            intern_search = (settings.employment or "any").casefold() == "intern"
+            title_kind = f"{job.title} {job.employment}"
+            kind_ok = (not intern_search) or re.search(r"intern|trainee", title_kind, re.I) is not None
+            if (
+                close
+                and kind_ok
+                and sector_matches(job, settings.sectors)
+                and sector_in_title(job, settings.sectors)
+                and not workplace_problem(job, settings)
+                and requirement_block(job, settings) is None
+            ):
+                note = "Below your match score" if (decision.reason or "").startswith("Match") else "Below your minimum stipend"
+                nearest.append((decision.score or score_job(job, profile, settings), job, note))
             continue
         blocked = requirement_block(job, settings)
         if blocked:
@@ -427,7 +443,19 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
         verified.append((score, job))
     verified.sort(key=lambda item: (item[1].availability_status == "ACTIVE", item[0]), reverse=True)
     top = verified[:target]
-    cards = [_card(job, score, profile, job.availability_status) for score, job in top]
+    relaxed = False
+    if not top and nearest:
+        nearest.sort(key=lambda item: item[0], reverse=True)
+        relaxed = True
+        top = [(score, job) for score, job, _note in nearest[:target]]
+        notes = {id(job): note for _score, job, note in nearest}
+    else:
+        notes = {}
+    cards = [
+        _card(job, score, profile, job.availability_status, notes.get(id(job), ""))
+        for score, job in top
+        if safe_http_url(job.apply_url or job.url)
+    ]
     visible_report = [row for row in report if row.get("status") != "meta"]
     return {
         "opportunities": cards,
@@ -442,5 +470,6 @@ def analyze_job_market(profile: Profile, settings: Settings, target_count: int |
         "rejection_counts": rejected,
         "qualified": len(ranked),
         "final_count": len(cards),
+        "relaxed": relaxed,
         "discovered": next((row.get("count") or 0 for row in report if row.get("name") == "_discovered"), raw_count),
     }

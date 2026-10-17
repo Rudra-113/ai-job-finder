@@ -56,7 +56,7 @@
 
 <section id="opportunities">
   {% if opportunities %}
-  <h2>{{ final_count }} best opportunities</h2>
+  <h2>{% if relaxed %}{{ final_count }} closest opportunities{% else %}{{ final_count }} best opportunities{% endif %}</h2>
   <div class="grid">
     {% for card in opportunities %}
     <article class="opportunity">
@@ -67,19 +67,25 @@
       <p>{{ card.compensation }}</p>
       <p class="meta">Posted {{ card.posted or "date not listed" }} · {{ card.availability }}</p>
       <p class="meta">Found on {{ card.sources | join(' · ') }}</p>
+      {% if card.fit_note %}<p class="badge warn">{{ card.fit_note }}</p>{% endif %}
       {% if card.why %}<p class="why">Why it matches: {% for item in card.why %}✓ {{ item }} {% endfor %}</p>{% endif %}
       {% if card.gaps %}<p class="why">Potential gaps: {% for item in card.gaps %}△ {{ item }} {% endfor %}</p>{% endif %}
+      {% if card.apply_url %}
+      <p class="direct-link"><span>Apply here</span><a href="{{ card.apply_url }}" target="_blank" rel="noopener noreferrer">{{ card.apply_url }}</a></p>
+      {% endif %}
       <div class="button-row">
         <a class="button-link secondary" href="{{ url_for('opportunity', opportunity_id=card.id) }}">View details</a>
-        {% if card.official_verified and card.official_url %}
-        <a class="button-link" href="{{ card.official_url }}" target="_blank" rel="noopener noreferrer">Apply on official site</a>
-        {% elif card.url %}
-        <a class="button-link" href="{{ card.url }}" target="_blank" rel="noopener noreferrer">View job</a>
-        <span class="hint">Official application link could not be verified.</span>
+        {% if card.apply_url %}
+        <a class="button-link" href="{{ card.apply_url }}" target="_blank" rel="noopener noreferrer">{{ card.apply_label or "Apply" }}</a>
         {% endif %}
       </div>
     </article>
     {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty card">
+    <h2>No opportunities on screen yet</h2>
+    <p>Run a search. Every result includes a direct application link you can open yourself.</p>
   </div>
   {% endif %}
 </section>

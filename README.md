@@ -27,7 +27,7 @@ Then open [http://127.0.0.1:47321](http://127.0.0.1:47321).
 
 Leave that window open. Closing it stops the agent. To stop a search first, click **Stop** on the Search page, then close the window.
 
-The first run downloads Chromium into your user profile. That download is used only to fill application forms.
+The first run may download Chromium into your user profile. The published site does not use it to fill or submit applications.
 
 ## Set it up
 
@@ -78,24 +78,11 @@ On **Search**, describe what you want, set how many opportunities to return, and
 
 The search reads every source it can, combines the listings, drops closed ones, removes duplicates, and scores the rest against your resume. The number you enter is how many final opportunities to show.
 
-**View details** opens the match explanation. **Apply on official site** opens the employer’s application page when that link is a verified company application. You apply there yourself.
+**View details** opens the match explanation. Every result shows the listing’s own application URL and an **Apply** button. That button opens the page in a new tab. You apply there yourself. When the company careers link is verified, the button reads **Apply on official site**.
 
-Missing pay is kept and shown as compensation not disclosed. Unpaid roles are skipped. A stated stipend below your minimum is skipped. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
+If nothing clears every filter, the page shows the closest same-sector roles that missed only on match score or stated pay. Each of those still has a direct application link. Unpaid roles, fee requests, the wrong sector, and the wrong workplace stay hidden.
 
-The counters include Found, Rejected, Qualified, Analyzed, Active, Duplicates removed, Final, Needs review, Filled, Submitted, Skipped, and Failed. Each submitted application lists the company, role, date, application URL, match score, resume, and status.
-
-## When it stops and asks you
-
-A job appears under **Needs you** when the agent hits:
-
-- a CAPTCHA or human check
-- an unusual identity check
-- a required fact that is not on your Profile
-- a request for payment
-- a login or account wall
-- a field it cannot fill without guessing
-
-**Try again** opens that application once more, and the same safety checks still apply. **Don't apply** records it so it is never opened again.
+Missing pay is kept and shown as compensation not disclosed. Unpaid roles are skipped. A stated stipend below your minimum is skipped unless it is shown as a closest match. Hybrid roles are skipped unless you enable hybrid. On-site roles are skipped when Remote is selected.
 
 ## Gmail, for one-time codes only
 
@@ -199,3 +186,5 @@ The tests use local sample forms. They do not submit applications to real employ
 The same steps work with `python3 -m venv .venv` and `.venv/bin/python`. On a machine with no display, the browser runs hidden. Set `JOBAGENT_HEADLESS=0` to show it when a display is available. Windows shows the browser unless `JOBAGENT_HEADLESS=1`.
 
 Flask is only the local page. The optional Cloudflare link is a temporary tunnel to the password gate, not a hosted copy of the app.
+
+Launched from Trident Tech Labs.
