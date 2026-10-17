@@ -146,6 +146,36 @@ Everything private is in the `data` folder next to `app.py`:
 
 Keep this folder on your computer. It is not part of the program files you would share.
 
+## Temporary link from another computer
+
+The agent stays on this computer. A password gate on `127.0.0.1:47322` forwards to `127.0.0.1:47321` only after a sign-in. A Cloudflare Quick Tunnel publishes that gate, not a deployed copy of the app.
+
+Install cloudflared once. On Windows:
+
+```bat
+winget install --id Cloudflare.cloudflared
+```
+
+Start the agent first (`run.bat`). Then:
+
+```bat
+.venv\Scripts\python start_tunnel.py
+```
+
+The window prints the public `https://….trycloudflare.com` address, the username `jobagent`, and a password. The password is saved in `data\tunnel_password`. It is not your Gmail password. The browser asks for it before any page loads. Gmail tokens stay in `data` and are not served as files.
+
+On this computer, [http://127.0.0.1:47321](http://127.0.0.1:47321) stays open without that password.
+
+Close the tunnel:
+
+```bat
+.venv\Scripts\python stop_tunnel.py
+```
+
+You can also close the Command Prompt that is running `start_tunnel.py` only when you started cloudflared in that same window. `stop_tunnel.py` is the reliable way: it stops cloudflared and the password gate, and leaves the job agent running. The public URL stops working as soon as the tunnel process exits. Quick Tunnels are temporary; a new start prints a new URL.
+
+Traffic through the public URL passes Cloudflare. Close the tunnel when you are finished. Anyone who has the password can use the agent.
+
 ## Tests
 
 ```bat
@@ -158,4 +188,4 @@ The tests use local sample forms. They do not submit applications to real employ
 
 The same steps work with `python3 -m venv .venv` and `.venv/bin/python`. On a machine with no display, the browser runs hidden. Set `JOBAGENT_HEADLESS=0` to show it when a display is available. Windows shows the browser unless `JOBAGENT_HEADLESS=1`.
 
-Flask is only the local page. There is no public site.
+Flask is only the local page. The optional Cloudflare link is a temporary tunnel to the password gate, not a hosted copy of the app.
