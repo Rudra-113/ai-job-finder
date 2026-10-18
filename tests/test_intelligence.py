@@ -123,6 +123,16 @@ def test_resume_extract_does_not_invent_fields():
     assert "Python" in extracted["skills"]
     assert extracted["degree"]
     assert "COBOL" not in extracted["skills"]
+    combined = extract_resume(
+        "Ada Lovelace\nada@example.com\n\nTECHNICAL SKILLS\nPython, Linux\n\n"
+        "CERTIFICATIONS & ACHIEVEMENTS\nAWS Cloud Practitioner\nDean list 2024\n\n"
+        "DECLARATION\nI hereby declare this is true.\n"
+    )
+    assert "Python" in combined["skills"]
+    assert "AWS Cloud Practitioner" in combined["certifications"]
+    assert "Dean list 2024" in combined["achievements"]
+    assert "declare" not in combined["skills"]
+    assert "AWS" not in " ".join(combined["skills"])
 
 
 def test_every_result_has_a_direct_apply_link(tmp_path):

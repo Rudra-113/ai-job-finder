@@ -82,6 +82,12 @@ def test_gate_requires_password_and_rewrites_host():
     assert "forwarded=example.trycloudflare.com" in forwarded
     assert "proto=https" in forwarded
     assert upstream.body == b"hello"
+    cookie = response.headers.get("Set-Cookie", "")
+    assert cookie.startswith("jobagent_gate=")
+    assert "HttpOnly" in cookie
+    token = cookie.split(";", 1)[0]
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"Cookie": token}), timeout=3) as replay:
+        assert replay.status == 200
     blocked = urllib.request.Request(
         f"http://127.0.0.1:{gate.server_address[1]}/data/gmail_token.json",
         headers={"Authorization": _basic(USERNAME, "long-enough-password")},

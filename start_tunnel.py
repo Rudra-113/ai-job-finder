@@ -155,7 +155,7 @@ def start_cloudflared(binary: str) -> str:
 def main() -> None:
     if not agent_is_up():
         raise SystemExit(
-            "The job agent is not running. Start it first with run.bat or: python app.py\n"
+            "The job agent is not running. Start it first with run.bat or from backend/: SERVE_FRONTEND=1 python app.py\n"
             f"It must be on http://{GATE_HOST}:{UPSTREAM_PORT}"
         )
     binary = cloudflared_bin()

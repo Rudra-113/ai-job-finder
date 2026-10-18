@@ -24,19 +24,40 @@ _HEADERS = {
 }
 
 
+def _section_targets(line: str) -> list[str] | None:
+    if len(line) > 48:
+        return None
+    normalized = re.sub(r"[^a-z]+", " ", line.casefold())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if not normalized or len(normalized.split()) > 6:
+        return None
+    if normalized in _HEADERS:
+        return [_HEADERS[normalized]]
+    if normalized in {"declaration", "references"}:
+        return []
+    targets = []
+    if "certification" in normalized or normalized == "certificates":
+        targets.append("certifications")
+    if "achievement" in normalized:
+        targets.append("achievements")
+    return targets or None
+
+
 def _sections(text: str) -> dict[str, str]:
-    current = "header"
+    current = ["header"]
     buckets: dict[str, list[str]] = {"header": []}
     for raw in (text or "").splitlines():
         line = raw.strip()
         if not line:
             continue
-        key = _HEADERS.get(re.sub(r"[^a-z ]+", "", line.casefold()).strip())
-        if key and len(line) < 40:
-            current = key
-            buckets.setdefault(current, [])
+        targets = _section_targets(line)
+        if targets is not None:
+            current = targets
+            for name in current:
+                buckets.setdefault(name, [])
             continue
-        buckets.setdefault(current, []).append(line)
+        for name in current:
+            buckets.setdefault(name, []).append(line)
     return {name: "\n".join(lines) for name, lines in buckets.items()}
 
 

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profile — AI Job Finder</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="profile">
+  <div class="aurora" aria-hidden="true"></div>
+  <header></header>
+  <main>
+    <p id="banner" class="banner" hidden></p>
+    <h1>Profile</h1>
+    <p class="lede">This is the information matching uses. It stays with this account.</p>
+    <form id="profile-form" class="stack">
+      <h2>Personal information</h2>
+      <label for="full_name">Name</label>
+      <input id="full_name" name="full_name" required>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required>
+      <label for="phone">Phone</label>
+      <input id="phone" name="phone">
+      <label for="city">City</label>
+      <input id="city" name="city">
+      <label for="country">Country</label>
+      <input id="country" name="country">
+      <label for="portfolio">Portfolio</label>
+      <input id="portfolio" name="portfolio">
+      <label for="linkedin">LinkedIn</label>
+      <input id="linkedin" name="linkedin">
+      <label for="github">GitHub</label>
+      <input id="github" name="github">
+      <label for="work_authorized">Work authorized</label>
+      <select id="work_authorized" name="work_authorized"><option value="">Not stated</option><option value="yes">Yes</option><option value="no">No</option></select>
+      <label for="needs_sponsorship">Needs sponsorship</label>
+      <select id="needs_sponsorship" name="needs_sponsorship"><option value="">Not stated</option><option value="yes">Yes</option><option value="no">No</option></select>
+      <h2>Education</h2>
+      <label for="degree">Degree</label>
+      <input id="degree" name="degree">
+      <label for="branch">Branch</label>
+      <input id="branch" name="branch">
+      <label for="college">College</label>
+      <input id="college" name="college">
+      <label for="graduation_year">Graduation year</label>
+      <input id="graduation_year" name="graduation_year">
+      <label for="education_raw">Education details</label>
+      <textarea id="education_raw" name="education_raw"></textarea>
+      <h2>Skills</h2>
+      <label for="skills">Skills</label>
+      <textarea id="skills" name="skills"></textarea>
+      <label for="languages">Programming languages</label>
+      <input id="languages" name="languages">
+      <label for="frameworks">Frameworks</label>
+      <input id="frameworks" name="frameworks">
+      <label for="tools">Tools</label>
+      <input id="tools" name="tools">
+      <h2>Experience</h2>
+      <textarea id="experience_raw" name="experience_raw"></textarea>
+      <h2>Projects</h2>
+      <textarea id="projects" name="projects"></textarea>
+      <h2>Certifications</h2>
+      <textarea id="certifications" name="certifications"></textarea>
+      <label for="achievements">Achievements</label>
+      <textarea id="achievements" name="achievements"></textarea>
+      <label for="domains">Preferred domains</label>
+      <input id="domains" name="domains">
+      <label for="extra_facts">Extra facts</label>
+      <textarea id="extra_facts" name="extra_facts"></textarea>
+      <button type="submit">Save profile</button>
+    </form>
+    <section class="card" style="margin-top:1rem">
+      <h2>Resume</h2>
+      <p id="cv-name">No resume uploaded.</p>
+      <form id="resume-form">
+        <label for="cv">Replace resume</label>
+        <input id="cv" name="cv" type="file" accept=".pdf,.docx,.txt,.md,application/pdf" required>
+        <button type="submit">Replace resume</button>
+      </form>
+      <div class="button-row">
+        <button class="secondary" id="reanalyze" type="button">Re-analyze resume</button>
+        <button class="secondary" id="delete-resume" type="button">Delete resume</button>
+      </div>
+    </section>
+    <section class="card" style="margin-top:1rem">
+      <h2>Delete account</h2>
+      <p>This removes the profile, resume, settings, and saved searches for this sign-in.</p>
+      <button class="secondary" id="delete-account" type="button">Delete account</button>
+    </section>
+  </main>
+  <footer></footer>
+  <script src="config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/profile.js"></script>
+</body>
+</html>

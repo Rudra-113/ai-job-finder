@@ -16,7 +16,7 @@ def project_root() -> Path:
 
 
 def default_home() -> Path:
-    env = os.environ.get("JOBAGENT_HOME")
+    env = os.environ.get("DATA_DIR") or os.environ.get("JOBAGENT_HOME")
     if env:
         return Path(env).expanduser()
     return project_root() / "data"

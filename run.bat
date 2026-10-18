@@ -8,10 +8,12 @@ if not exist ".venv\Scripts\python.exe" (
   echo Python 3.11 or newer is required. Install it from https://www.python.org/downloads/ and check Add python.exe to PATH.
   exit /b 1
 )
-".venv\Scripts\python.exe" -m pip install -r requirements.txt
+".venv\Scripts\python.exe" -m pip install -r backend\requirements.txt -r backend\requirements-dev.txt
 if errorlevel 1 exit /b 1
-".venv\Scripts\python.exe" -m playwright install chromium
-if errorlevel 1 exit /b 1
-echo Job Agent: http://127.0.0.1:47321
-echo Leave this window open. Closing it stops the agent.
-".venv\Scripts\python.exe" app.py
+set SERVE_FRONTEND=1
+set PORT=47321
+set BIND_HOST=0.0.0.0
+if not defined DATA_DIR set DATA_DIR=%~dp0data
+echo AI Job Finder: http://127.0.0.1:47321
+echo Leave this window open. Closing it stops the API.
+".venv\Scripts\python.exe" backend\app.py

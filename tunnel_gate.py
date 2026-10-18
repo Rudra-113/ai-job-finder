@@ -1,14 +1,15 @@
 """Password gate in front of the local job agent.
 
-The agent keeps listening on 127.0.0.1:47321 and still refuses other Host
-headers. This process also listens only on 127.0.0.1. It asks for a password,
-then forwards the request to the agent with the Host header rewritten.
+The local agent listens on port 47321. This process listens only on
+127.0.0.1. It asks for a password, then forwards the request with Host
+rewritten to that local port and the public name kept in X-Forwarded-Host.
 Gmail tokens and the data folder are not files this gate will fetch.
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import hmac
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -60,6 +61,19 @@ def _public_host(headers) -> str:
 def _blocked(path: str) -> bool:
     name = (path or "").split("?", 1)[0].casefold()
     return any(part in name for part in _BLOCKED)
+
+
+def _gate_token(password: str) -> str:
+    return hmac.new(password.encode("utf-8"), b"jobagent-gate-v1", hashlib.sha256).hexdigest()
+
+
+def _cookie_authorized(header: str, password: str) -> bool:
+    expected = _gate_token(password)
+    for part in (header or "").split(";"):
+        name, sep, value = part.strip().partition("=")
+        if sep and name == "jobagent_gate" and hmac.compare_digest(value, expected):
+            return True
+    return False
 
 
 def _authorized(header: str, username: str, password: str) -> bool:
@@ -142,7 +156,9 @@ class GateHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def _forward(self):
-        if not _authorized(self.headers.get("Authorization", ""), self.server.username, self.server.password):
+        password = self.server.password
+        via_password = _authorized(self.headers.get("Authorization", ""), self.server.username, password)
+        if not via_password and not _cookie_authorized(self.headers.get("Cookie", ""), password):
             self._unauthorized()
             return
         if _blocked(self.path):
@@ -189,6 +205,13 @@ class GateHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         for key, value in forwarded:
             self.send_header(key, value)
+        if via_password:
+            # The browser sends the password for the page, then omits it on fetch().
+            # A cookie keeps those API calls authorized.
+            self.send_header(
+                "Set-Cookie",
+                f"jobagent_gate={_gate_token(password)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200",
+            )
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()

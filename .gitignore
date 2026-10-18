@@ -3,5 +3,8 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .env
+*.log
 data/**
 !data/.gitkeep
+backend/data/**
+!backend/data/.gitkeep

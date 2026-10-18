@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Search — AI Job Finder</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="search">
+  <div class="aurora" aria-hidden="true"></div>
+  <header></header>
+  <main>
+    <p id="banner" class="banner" hidden></p>
+    <section class="hero search-box">
+      <h1>What are you looking for?</h1>
+      <form id="search-form">
+        <label class="hint" for="request">Role, place, and pay.</label>
+        <textarea id="request" name="request" placeholder="Remote cybersecurity internships in India, at least ₹10000 a month."></textarea>
+        <label for="opportunity_count">How many results</label>
+        <input id="opportunity_count" name="opportunity_count" type="number" min="1" max="100" value="20">
+        <div class="button-row"><button type="submit">Search</button></div>
+      </form>
+      <form id="stop-form" hidden>
+        <button class="secondary" type="submit">Stop search</button>
+      </form>
+    </section>
+    <p id="status-line" role="status">Loading your search…</p>
+    <section class="stats" aria-label="Search statistics">
+      <div class="stat"><b id="discovered">0</b><span>Jobs discovered</span></div>
+      <div class="stat"><b id="analyzed">0</b><span>Unique jobs</span></div>
+      <div class="stat"><b id="active">0</b><span>Active</span></div>
+      <div class="stat"><b id="strong">0</b><span>Strong matches</span></div>
+      <div class="stat"><b id="final-count">0</b><span>Top opportunities</span></div>
+    </section>
+    <section id="sources"></section>
+    <section id="loading" hidden>
+      <p>Searching job sources...</p>
+      <div class="grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+    </section>
+    <section id="opportunities"></section>
+    <section id="rejections"></section>
+    <section>
+      <h2>Previous searches</h2>
+      <div id="history" class="grid"></div>
+    </section>
+  </main>
+  <footer></footer>
+  <script src="config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

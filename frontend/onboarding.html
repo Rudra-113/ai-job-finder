@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up — AI Job Finder</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="profile">
+  <div class="aurora" aria-hidden="true"></div>
+  <header></header>
+  <main>
+    <p id="banner" class="banner" hidden></p>
+    <h1>Set up your search</h1>
+    <p class="lede">Upload a resume. Check what was read, then answer a few questions.</p>
+    <section class="card">
+      <h2>1. Upload your resume</h2>
+      <form id="resume-form" class="stack">
+        <label for="cv">PDF, DOCX, TXT, or MD</label>
+        <input id="cv" name="cv" type="file" accept=".pdf,.docx,.txt,.md,application/pdf" required>
+        <button type="submit">Read resume</button>
+      </form>
+    </section>
+    <section id="confirm-section" class="card" style="margin-top:1rem" hidden>
+      <h2>AI profile</h2>
+      <p>Check this against the resume. Empty fields were not in the file.</p>
+      <form id="confirm-form">
+        <label for="full_name">Name</label>
+        <input id="full_name" name="full_name" required>
+        <div class="grid two">
+          <div><label for="email">Email</label><input id="email" name="email" type="email" required></div>
+          <div><label for="phone">Phone</label><input id="phone" name="phone"></div>
+        </div>
+        <div class="grid two">
+          <div><label for="degree">Degree</label><input id="degree" name="degree"></div>
+          <div><label for="branch">Branch</label><input id="branch" name="branch"></div>
+        </div>
+        <div class="grid two">
+          <div><label for="college">College</label><input id="college" name="college"></div>
+          <div><label for="graduation_year">Graduation year</label><input id="graduation_year" name="graduation_year"></div>
+        </div>
+        <label for="city">Location</label>
+        <input id="city" name="city">
+        <label for="skills">Skills</label>
+        <textarea id="skills" name="skills"></textarea>
+        <label for="languages">Programming languages</label>
+        <input id="languages" name="languages">
+        <label for="frameworks">Frameworks</label>
+        <input id="frameworks" name="frameworks">
+        <label for="tools">Tools</label>
+        <input id="tools" name="tools">
+        <label for="certifications">Certifications</label>
+        <textarea id="certifications" name="certifications"></textarea>
+        <label for="projects">Projects</label>
+        <textarea id="projects" name="projects"></textarea>
+        <label for="experience_raw">Experience and internships</label>
+        <textarea id="experience_raw" name="experience_raw"></textarea>
+        <label for="education_raw">Education</label>
+        <textarea id="education_raw" name="education_raw"></textarea>
+        <label for="achievements">Achievements</label>
+        <textarea id="achievements" name="achievements"></textarea>
+        <label for="domains">Preferred domains</label>
+        <input id="domains" name="domains">
+        <h2>2. A few questions</h2>
+        <p>What type of opportunities are you looking for?</p>
+        <label class="check"><input type="checkbox" name="employment_choice" value="intern"> Internship</label>
+        <label class="check"><input type="checkbox" name="employment_choice" value="full-time"> Full-time</label>
+        <label class="check"><input type="checkbox" name="employment_choice" value="part-time"> Part-time</label>
+        <label class="check"><input type="checkbox" name="employment_choice" value="contract"> Contract</label>
+        <label for="workplace">What work arrangement do you prefer?</label>
+        <select id="workplace" name="workplace">
+          <option value="remote">Remote</option>
+          <option value="hybrid">Hybrid</option>
+          <option value="onsite">On-site</option>
+          <option value="any">Any</option>
+        </select>
+        <label for="location">What locations are acceptable?</label>
+        <input id="location" name="location" placeholder="India, Lucknow, or leave blank">
+        <label for="minimum_stipend">Minimum expected stipend or monthly salary</label>
+        <input id="minimum_stipend" name="minimum_stipend" type="number" min="0" step="1">
+        <label for="roles">What roles are you interested in?</label>
+        <input id="roles" name="roles">
+        <label for="sector">What industries or sectors are you interested in?</label>
+        <input id="sector" name="sector">
+        <p>What should we avoid?</p>
+        <label class="check"><input type="checkbox" name="avoid_unpaid" value="1"> Unpaid roles</label>
+        <label class="check"><input type="checkbox" name="avoid_relocation" value="1"> Roles requiring relocation</label>
+        <label class="check"><input type="checkbox" name="avoid_sales" value="1"> Sales roles</label>
+        <label class="check"><input type="checkbox" name="avoid_video" value="1"> Mandatory video introduction</label>
+        <label class="check"><input type="checkbox" name="avoid_above_level" value="1"> Roles requiring experience above my level</label>
+        <label for="other_preferences">Other preferences</label>
+        <textarea id="other_preferences" name="other_preferences" placeholder="Find remote cybersecurity internships in India."></textarea>
+        <div class="button-row"><button type="submit">Continue</button></div>
+      </form>
+    </section>
+  </main>
+  <footer></footer>
+  <script src="config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/onboarding.js"></script>
+</body>
+</html>
