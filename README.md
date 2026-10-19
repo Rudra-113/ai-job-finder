@@ -80,8 +80,9 @@ Launched from Trident Tech Labs.
 - Job search, source reporting, and match scoring
 - Closest matches when nothing clears every filter, each with a real apply URL
 - Job details and the direct application link
-- Google sign-in and the saved local workspace
 - Unpaid roles, fee requests, the wrong sector, and the wrong workplace stay hidden
+
+No account or Google sign-in is required. Each browser gets its own saved resume and searches.
 
 Search does not invent employers, skills, pay, or URLs.
 
@@ -130,8 +131,6 @@ The Netlify build writes `frontend/config.js`. An empty value means same-origin,
 | `FRONTEND_ORIGIN` | Yes | Comma-separated Netlify origins, for example `https://your-site.netlify.app`. CORS allows only these origins. There is no `*` default. |
 | `SECRET_KEY` | Yes | Session signing key. Render can generate it. If unset locally, a key is stored in `DATA_DIR/secret.key`. |
 | `ALLOWED_HOSTS` | When using a custom domain | Comma-separated hostnames. `127.0.0.1` and `localhost` are the local default. On Render, `RENDER_EXTERNAL_HOSTNAME` and `*.onrender.com` are allowed as well. |
-| `GOOGLE_CLIENT_ID` | For Google sign-in | Web OAuth client. |
-| `GOOGLE_CLIENT_SECRET` | For Google sign-in | Web OAuth client secret. |
 | `SESSION_COOKIE_SAMESITE` | No | Override. Production default is `None`. |
 | `SESSION_COOKIE_SECURE` | No | Override. Production default is on. |
 | `FLASK_DEBUG` | No | Local only. Forced off when `APP_ENV=production` or `RENDER=true`. |
@@ -164,7 +163,6 @@ The site is a set of HTML pages. No SPA redirect is required.
 - `DATA_DIR=/var/data`
 - `APP_ENV=production`
 - Set `FRONTEND_ORIGIN` to the exact Netlify origin after the first frontend deploy
-- Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` if Google sign-in should work in production
 
 The API listens on `0.0.0.0` and `$PORT`. Debug is off when Render sets `RENDER=true`.
 
@@ -182,12 +180,6 @@ The running API does not import Playwright and does not launch a browser. Produc
 ```
 
 Do not add that install step to the Render build.
-
-### Google sign-in in production
-
-The desktop client saved for local use only accepts `http://127.0.0.1` or `http://localhost`. A Render callback is `https://<service>.onrender.com/auth/google/callback`. Create a **Web** OAuth client in Google Cloud, add that redirect URI, and set the two Google environment variables on Render. The app asks for name, email, and account id. It does not ask for a Gmail password and it does not read the mailbox.
-
-On this computer, the installed client in `data/gmail_client_secret.json` still works. Google returns to `http://127.0.0.1:<port>/auth/google/callback`. From the temporary public tunnel, paste that address into **Google return address**.
 
 ## Uploads and logs
 

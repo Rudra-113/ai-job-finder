@@ -87,10 +87,7 @@ function renderHistory(items) {
 
 async function startDashboard() {
   const session = await bootShell();
-  if (!session || !session.logged_in) {
-    window.location.href = "auth.html";
-    return;
-  }
+  if (!session) return;
   let home;
   try {
     home = await api("/api/home");
@@ -137,7 +134,7 @@ async function startDashboard() {
     try {
       renderSearch(await api("/api/status", { quiet: true }));
     } catch (error) {
-      if (error.status === 401) window.location.href = "auth.html";
+      return;
     }
   }, 2000);
 }

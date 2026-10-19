@@ -28,10 +28,7 @@ function fill(profile, settings) {
 
 async function startOnboarding() {
   const session = await bootShell();
-  if (!session || !session.logged_in) {
-    window.location.href = "auth.html";
-    return;
-  }
+  if (!session) return;
   const state = await api("/api/onboarding");
   fill(state.profile, state.settings);
   document.getElementById("resume-form").addEventListener("submit", async (event) => {

@@ -20,10 +20,7 @@ function check(name, label, checked) {
 
 async function startSettings() {
   const session = await bootShell();
-  if (!session || !session.logged_in) {
-    window.location.href = "auth.html";
-    return;
-  }
+  if (!session) return;
   const settings = await api("/api/settings");
   const form = document.getElementById("settings-form");
   const weights = settings.match_weights || {};

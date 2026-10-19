@@ -50,7 +50,3 @@ async function loadSession() {
   csrfToken = data.csrf || csrfToken;
   return data;
 }
-
-function googleStartUrl() {
-  return apiBase() + "/auth/google";
-}

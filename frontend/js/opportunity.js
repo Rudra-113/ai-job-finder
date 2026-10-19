@@ -9,10 +9,7 @@ function esc(value) {
 
 async function startOpportunity() {
   const session = await bootShell();
-  if (!session || !session.logged_in) {
-    window.location.href = "auth.html";
-    return;
-  }
+  if (!session) return;
   const id = new URLSearchParams(window.location.search).get("id") || "";
   const root = document.getElementById("detail");
   try {

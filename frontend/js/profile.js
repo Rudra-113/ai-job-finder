@@ -21,10 +21,7 @@ function fill(profile) {
 
 async function startProfile() {
   const session = await bootShell();
-  if (!session || !session.logged_in) {
-    window.location.href = "auth.html";
-    return;
-  }
+  if (!session) return;
   fill(await api("/api/profile"));
   document.getElementById("profile-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -69,7 +66,7 @@ async function startProfile() {
     }
   });
   document.getElementById("delete-account").addEventListener("click", async () => {
-    if (!window.confirm("Delete this account's profile, resume, settings, and saved searches?")) return;
+    if (!window.confirm("Delete the profile, resume, settings, and saved searches in this browser?")) return;
     try {
       await api("/api/account/delete", { method: "POST" });
       window.location.href = "index.html";

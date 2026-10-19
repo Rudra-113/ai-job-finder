@@ -3,8 +3,6 @@ import json
 import re
 from pathlib import Path
 
-import pytest
-
 from app import bind_host, create_app
 from jobagent.profile import save_profile
 from jobagent.runner import run_cycle
@@ -55,8 +53,13 @@ def test_pages_and_csrf_and_host(tmp_path):
     assert "Find the right job" in landing
     assert "Get Started Free" in landing
     auth = (Path(__file__).resolve().parents[1] / "frontend" / "auth.html").read_text(encoding="utf-8")
-    assert "Continue with Google" in auth
-    denied = client.post("/api/auth/local")
+    assert "Continue with Google" not in auth
+    assert "onboarding.html" in auth
+    opened = client.get("/auth")
+    assert opened.status_code == 302
+    assert opened.headers["Location"].endswith("/onboarding.html")
+    assert client.get("/auth/google").status_code == 404
+    denied = client.post("/api/search")
     assert denied.status_code == 400
     blocked = client.get("/api/health", base_url="http://evil.example")
     assert blocked.status_code == 403
@@ -169,124 +172,32 @@ def test_search_lists_jobs_without_applying(tmp_path, monkeypatch):
     assert not (home / "applications.json").exists()
 
 
-def _gmail_client(home):
-    (home / "gmail_client_secret.json").write_text(
-        json.dumps(
-            {
-                "installed": {
-                    "client_id": "test-client.apps.googleusercontent.com",
-                    "client_secret": "test-secret",
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://localhost"],
-                }
-            }
-        ),
-        encoding="utf-8",
+def test_anonymous_visitors_keep_separate_resumes(tmp_path):
+    application = create_app(tmp_path)
+    first = application.test_client()
+    second = application.test_client()
+    session_info = first.get("/api/session").get_json()
+    assert session_info["logged_in"] is True
+    assert "google_ready" not in session_info
+    token = session_info["csrf"]
+    uploaded = first.post(
+        "/api/onboarding/resume",
+        data={"csrf": token, "cv": (io.BytesIO(b"Ada Lovelace\nPython\n"), "notes.txt")},
+        content_type="multipart/form-data",
     )
-
-
-def test_desktop_gmail_client_starts_google_sign_in(tmp_path):
-    from urllib.parse import unquote
-
-    _gmail_client(tmp_path)
-    _app, client = _client(tmp_path)
-    auth = (Path(__file__).resolve().parents[1] / "frontend" / "js" / "auth.js").read_text(encoding="utf-8")
-    assert "googleStartUrl" in auth
-    started = client.get("/auth/google")
-    assert started.status_code == 302
-    location = unquote(started.headers["Location"])
-    assert location.startswith("https://accounts.google.com/")
-    assert "redirect_uri=http://127.0.0.1:47321/auth/google/callback" in location
-    assert "gmail.readonly" not in location
-
-
-def test_matching_gmail_opens_the_saved_profile(tmp_path, monkeypatch):
-    _gmail_client(tmp_path)
-    save_profile(tmp_path, strong_profile(tmp_path))
-    save_settings(tmp_path, strong_settings())
-    _app, client = _client(tmp_path)
-    monkeypatch.setattr(
-        "app.exchange_identity",
-        lambda home, redirect_uri, returned: {"sub": "google-sub-1", "email": "Ada@example.com", "name": "Ada Lovelace"},
+    assert uploaded.status_code == 200
+    assert uploaded.get_json()["profile"]["has_resume"] is True
+    assert second.get("/api/profile").get_json()["has_resume"] is False
+    with first.session_transaction() as sess:
+        visitor = sess["user_id"]
+    assert visitor.startswith("anon_")
+    assert (tmp_path / "users" / visitor / "profile.json").is_file()
+    assert not (tmp_path / "profile.json").exists()
+    gone = first.post(
+        "/api/auth/google/finish",
+        data={"csrf": token, "returned": "http://127.0.0.1/auth/google/callback?code=1&state=abc"},
     )
-    assert client.get("/auth/google").status_code == 302
-    with client.session_transaction() as sess:
-        state = sess["oauth_state"]
-    done = client.get(f"/auth/google/callback?code=fake-code&state={state}")
-    assert done.status_code == 302
-    assert done.headers["Location"].endswith("/dashboard.html")
-    with client.session_transaction() as sess:
-        assert sess["user_id"] == "local"
-    assert not (tmp_path / "users").exists()
-    home = client.get("/api/home")
-    assert home.status_code == 200
-    assert home.get_json()["needs_onboarding"] is False
-
-
-def test_other_gmail_does_not_open_the_saved_profile(tmp_path, monkeypatch):
-    _gmail_client(tmp_path)
-    save_profile(tmp_path, strong_profile(tmp_path))
-    _app, client = _client(tmp_path)
-    monkeypatch.setattr(
-        "app.exchange_identity",
-        lambda home, redirect_uri, returned: {"sub": "other-person", "email": "other@example.com", "name": "Other Person"},
-    )
-    client.get("/auth/google")
-    with client.session_transaction() as sess:
-        state = sess["oauth_state"]
-    done = client.get(f"/auth/google/callback?code=fake-code&state={state}")
-    assert done.status_code == 302
-    with client.session_transaction() as sess:
-        assert sess["user_id"] == "other-person"
-    assert (tmp_path / "users" / "other-person").is_dir()
-    saved = json.loads((tmp_path / "profile.json").read_text(encoding="utf-8"))
-    assert saved["email"] == "ada@example.com"
-
-
-def test_public_sign_in_can_finish_from_the_loopback_address(tmp_path, monkeypatch):
-    _gmail_client(tmp_path)
-    save_profile(tmp_path, strong_profile(tmp_path))
-    _app, client = _client(tmp_path)
-    monkeypatch.setattr(
-        "app.exchange_identity",
-        lambda home, redirect_uri, returned: {"sub": "google-sub-1", "email": "ada@example.com", "name": "Ada Lovelace"},
-    )
-    headers = {"X-Forwarded-Host": "example.trycloudflare.com", "X-Forwarded-Proto": "https"}
-    session_info = client.get("/api/session", headers=headers).get_json()
-    assert session_info["remote_auth"] is True
-    spoofed = client.get(
-        "/api/session",
-        headers=headers,
-        environ_base={"REMOTE_ADDR": "203.0.113.8"},
-    ).get_json()
-    assert spoofed["remote_auth"] is False
-    assert client.get("/auth/google", headers=headers).status_code == 302
-    with client.session_transaction() as sess:
-        state = sess["oauth_state"]
-        redirect_uri = sess["oauth_redirect"]
-    assert redirect_uri.startswith("http://127.0.0.1:")
-    done = client.post(
-        "/auth/google/finish",
-        data={"csrf": _csrf(client), "returned": f"{redirect_uri}?code=fake-code&state={state}"},
-        headers=headers,
-    )
-    assert done.status_code == 302
-    assert done.headers["Location"].endswith("/dashboard.html")
-    with client.session_transaction() as sess:
-        assert sess["user_id"] == "local"
-
-
-def test_paste_rejects_a_public_address(tmp_path):
-    _gmail_client(tmp_path)
-    _app, client = _client(tmp_path)
-    page = client.get("/auth")
-    done = client.post(
-        "/auth/google/finish",
-        data={"csrf": _csrf(client), "returned": "https://evil.example/auth/google/callback?code=1&state=abc"},
-    )
-    assert done.status_code == 302
-    assert done.headers["Location"].endswith("/auth.html")
+    assert gone.status_code == 404
 
 
 def test_cors_allows_only_the_configured_frontend(tmp_path, monkeypatch):

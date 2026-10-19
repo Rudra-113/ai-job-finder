@@ -7,15 +7,12 @@ import os
 import re
 import secrets
 import shutil
-import time
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
 
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
 from werkzeug.datastructures import ImmutableMultiDict
 
-from jobagent.accounts import user_home, workspace_id
-from jobagent.auth_google import authorization_url, exchange_identity, google_ready, loopback_return, sign_in_redirect
+from jobagent.accounts import user_home
 from jobagent.history import find_search, load_history
 from jobagent.logsetup import configure
 from jobagent.paths import default_home, load_secret_key
@@ -28,18 +25,6 @@ from jobagent.textutil import safe_http_url
 ROOT = Path(__file__).resolve().parent
 FRONTEND = ROOT.parent / "frontend"
 CV_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
-PUBLIC_API = {
-    "/api/health",
-    "/api/session",
-    "/api/auth/local",
-    "/api/auth/google/finish",
-}
-PUBLIC_PAGES = {
-    "/auth/google",
-    "/auth/google/callback",
-    "/auth/google/finish",
-    "/auth/google/complete",
-}
 
 
 def bind_host() -> str:
@@ -93,29 +78,17 @@ def create_app(home: Path | None = None) -> Flask:
     def root_home() -> Path:
         return app.extensions["home"]
 
-    def signed_in() -> bool:
-        return bool(session.get("user_id"))
+    def ensure_visitor() -> None:
+        if session.get("user_id") or request.path == "/api/health":
+            return
+        session["user_id"] = "anon_" + secrets.token_hex(16)
 
     def current_home() -> Path:
+        ensure_visitor()
         return user_home(root_home(), session.get("user_id") or "")
 
     def agent() -> AgentService:
         return app.extensions["agent"]
-
-    def base_url() -> str:
-        forwarded = (request.headers.get("X-Forwarded-Host") or "").split(",")[0].strip()
-        proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "http").split(",")[0].strip() or "http"
-        forwarded_name = forwarded.split(":")[0].strip().lower()
-        if forwarded and host_allowed(forwarded_name):
-            return f"{proto}://{forwarded}".rstrip("/")
-        # The local password gate rewrites Host to loopback and keeps the public tunnel name.
-        if (
-            forwarded_name.endswith(".trycloudflare.com")
-            and request.remote_addr in {"127.0.0.1", "::1"}
-            and host_allowed(request.host)
-        ):
-            return f"https://{forwarded}".rstrip("/")
-        return request.host_url.rstrip("/")
 
     def wants_json() -> bool:
         if request.path.startswith("/api/"):
@@ -124,11 +97,6 @@ def create_app(home: Path | None = None) -> Flask:
             return True
         accept = request.headers.get("Accept", "")
         return "application/json" in accept
-
-    def fail(message: str, status: int):
-        if wants_json():
-            return jsonify({"ok": False, "error": message}), status
-        return redirect(page_url("/auth.html"))
 
     def ok(**payload):
         body = {"ok": True}
@@ -180,82 +148,8 @@ def create_app(home: Path | None = None) -> Flask:
                     token = str(body.get("csrf") or "")
             if not token or token != session.get("csrf"):
                 return jsonify({"ok": False, "error": "Reload the page and submit the form again."}), 400
-        if request.path in PUBLIC_API or request.path in PUBLIC_PAGES or request.path.startswith("/assets/"):
-            return None
-        if app.extensions["serve_frontend"] and request.method == "GET" and not request.path.startswith("/api/"):
-            return None
-        if request.path.startswith("/api/") and not signed_in():
-            return jsonify({"ok": False, "error": "Sign in required."}), 401
+        ensure_visitor()
         return None
-
-    def _oauth_box() -> dict:
-        return app.extensions.setdefault("oauth_pending", {})
-
-    def _remember_oauth(state: str, redirect_uri: str, return_to: str) -> None:
-        now = time.time()
-        pending = _oauth_box()
-        for key, row in list(pending.items()):
-            if now - float(row.get("created") or 0) > 600:
-                pending.pop(key, None)
-        pending[state] = {"redirect_uri": redirect_uri, "return_to": return_to, "created": now}
-
-    def _pending_oauth(state: str) -> dict | None:
-        row = _oauth_box().get(state)
-        if not row:
-            return None
-        if time.time() - float(row.get("created") or 0) > 600:
-            _oauth_box().pop(state, None)
-            return None
-        return row
-
-    def _drop_oauth(state: str) -> None:
-        _oauth_box().pop(state, None)
-
-    def _remember_ticket(identity: dict) -> str:
-        ticket = secrets.token_urlsafe(24)
-        now = time.time()
-        tickets = app.extensions.setdefault("oauth_tickets", {})
-        for key, row in list(tickets.items()):
-            if now - float(row.get("created") or 0) > 120:
-                tickets.pop(key, None)
-        tickets[ticket] = {"identity": identity, "created": now}
-        return ticket
-
-    def _take_ticket(ticket: str) -> dict | None:
-        row = app.extensions.setdefault("oauth_tickets", {}).pop(ticket, None)
-        if not row or time.time() - float(row.get("created") or 0) > 120:
-            return None
-        identity = row.get("identity")
-        return identity if isinstance(identity, dict) else None
-
-    def _listen_port() -> int:
-        host = request.host or ""
-        if ":" in host:
-            try:
-                return int(host.rsplit(":", 1)[1])
-            except ValueError:
-                pass
-        try:
-            return int(os.environ.get("PORT") or os.environ.get("JOBAGENT_PORT") or "47321")
-        except ValueError:
-            return 47321
-
-    def _start_session(user_id: str, name: str, email: str) -> None:
-        if user_id != "local":
-            user_id = workspace_id(root_home(), email, user_id)
-        session["user_id"] = user_id
-        session["user_name"] = name
-        session["user_email"] = email
-        home_path = user_home(root_home(), user_id)
-        profile = load_profile(home_path)
-        if email and not profile.email:
-            profile.email = email
-        if name and " " in name and not profile.full_name:
-            profile.full_name = name
-        save_profile(home_path, profile)
-
-    def _identity_from_return(redirect_uri: str, returned: str) -> dict:
-        return exchange_identity(root_home(), redirect_uri, returned)
 
     def _public_profile(profile) -> dict:
         data = profile.to_dict()
@@ -281,107 +175,19 @@ def create_app(home: Path | None = None) -> Flask:
 
     @app.get("/api/session")
     def session_info():
-        host = urlsplit(base_url()).hostname or ""
         return jsonify(
             {
-                "logged_in": signed_in(),
+                "logged_in": bool(session.get("user_id")),
                 "user_name": session.get("user_name") or "",
                 "user_email": session.get("user_email") or "",
                 "csrf": session.get("csrf") or "",
-                "google_ready": google_ready(root_home()),
-                "remote_auth": google_ready(root_home()) and (host.endswith("trycloudflare.com") or bool(frontend_origins())),
             }
         )
 
-    @app.post("/api/auth/local")
-    def local_sign_in():
-        _start_session("local", "Workspace", "")
-        return ok(next="/dashboard.html")
-
-    @app.post("/api/logout")
-    def logout():
-        session.pop("user_id", None)
-        session.pop("user_name", None)
-        session.pop("user_email", None)
-        return ok(next="/index.html")
-
-    @app.get("/auth/google")
-    def google_start():
-        if not google_ready(root_home()):
-            return redirect(page_url("/auth.html"))
-        redirect_uri = sign_in_redirect(root_home(), base_url(), _listen_port())
-        try:
-            url, state = authorization_url(root_home(), redirect_uri)
-        except Exception:
-            logging.getLogger("jobagent").error("google sign-in could not start")
-            return redirect(page_url("/auth.html"))
-        session["oauth_state"] = state
-        session["oauth_redirect"] = redirect_uri
-        _remember_oauth(state, redirect_uri, base_url())
-        return redirect(url)
-
-    @app.get("/auth/google/callback")
-    def google_callback():
-        if request.args.get("error"):
-            return redirect(page_url("/auth.html?notice=google"))
-        state = request.args.get("state") or ""
-        expected = session.get("oauth_state") or ""
-        pending = _pending_oauth(state)
-        if not state or (state != expected and not pending):
-            return redirect(page_url("/auth.html?notice=google"))
-        redirect_uri = session.get("oauth_redirect") or (pending or {}).get("redirect_uri") or sign_in_redirect(root_home(), base_url(), _listen_port())
-        returned = base_url() + request.full_path
-        try:
-            identity = _identity_from_return(redirect_uri, returned)
-        except Exception:
-            logging.getLogger("jobagent").error("google sign-in did not complete")
-            return redirect(page_url("/auth.html?notice=google"))
-        _drop_oauth(state)
-        session.pop("oauth_state", None)
-        session.pop("oauth_redirect", None)
-        return_to = (pending or {}).get("return_to") or ""
-        if state != expected and return_to and return_to != base_url():
-            ticket = _remember_ticket(identity)
-            return redirect(f"{return_to}/auth/google/complete?ticket={ticket}")
-        _start_session(identity["sub"], identity["name"], identity["email"])
-        return redirect(page_url("/dashboard.html"))
-
-    @app.post("/auth/google/finish")
-    @app.post("/api/auth/google/finish")
-    def google_finish():
-        incoming = form_data()
-        returned = (incoming.get("returned") or "").strip()
-        if not loopback_return(returned):
-            return fail("Paste the full address from the page Google opened, starting with http://127.0.0.1.", 400)
-        query = parse_qs(urlsplit(returned).query)
-        state = (query.get("state") or [""])[0]
-        expected = session.get("oauth_state") or ""
-        pending = _pending_oauth(state)
-        if not state or (state != expected and not pending):
-            return fail("That Google sign-in has expired. Start it again.", 400)
-        if query.get("error"):
-            return fail("Google sign-in was cancelled.", 400)
-        redirect_uri = session.get("oauth_redirect") or (pending or {}).get("redirect_uri") or ""
-        try:
-            identity = _identity_from_return(redirect_uri, returned)
-        except Exception:
-            logging.getLogger("jobagent").error("google finish did not complete")
-            return fail("Google did not complete sign-in. Nothing was stored.", 400)
-        _drop_oauth(state)
-        session.pop("oauth_state", None)
-        session.pop("oauth_redirect", None)
-        _start_session(identity["sub"], identity["name"], identity["email"])
-        if wants_json():
-            return ok(next="/dashboard.html")
-        return redirect(page_url("/dashboard.html"))
-
-    @app.get("/auth/google/complete")
-    def google_complete():
-        identity = _take_ticket(request.args.get("ticket") or "")
-        if not identity:
-            return redirect(page_url("/auth.html"))
-        _start_session(str(identity.get("sub") or ""), str(identity.get("name") or ""), str(identity.get("email") or ""))
-        return redirect(page_url("/dashboard.html"))
+    @app.get("/auth")
+    @app.get("/auth.html")
+    def auth_page():
+        return redirect(page_url("/onboarding.html"))
 
     @app.get("/api/home")
     def home_state():
@@ -435,7 +241,7 @@ def create_app(home: Path | None = None) -> Flask:
         home_path = current_home()
         row = find_search(home_path, search_id)
         if not row:
-            return jsonify({"ok": False, "error": "That search is not on this account."}), 404
+            return jsonify({"ok": False, "error": "That search is not in this browser."}), 404
         write_state(
             home_path,
             running=False,
@@ -530,7 +336,7 @@ def create_app(home: Path | None = None) -> Flask:
         profile.cv_path = ""
         profile.cv_text = ""
         save_profile(home_path, profile)
-        return ok(message="Resume deleted from this account.", profile=_public_profile(profile))
+        return ok(message="Resume deleted.", profile=_public_profile(profile))
 
     @app.get("/api/onboarding")
     def onboarding():
@@ -591,7 +397,7 @@ def create_app(home: Path | None = None) -> Flask:
     def short_page():
         return redirect(page_url(request.path + ".html"))
 
-    for page_name in ("auth", "dashboard", "profile", "settings", "onboarding", "opportunity", "privacy", "terms"):
+    for page_name in ("dashboard", "profile", "settings", "onboarding", "opportunity", "privacy", "terms"):
         app.add_url_rule(f"/{page_name}", endpoint=f"page_{page_name}", view_func=short_page)
 
     @app.get("/")
