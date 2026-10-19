@@ -1,205 +1,435 @@
-# AI Job Finder
-
-<<<<<<< HEAD
-> An AI-powered job and internship discovery platform that analyzes your resume, understands your preferences, searches multiple sources, and ranks the opportunities that best match your profile.
+# 🚀 AI Job Finder
 
 <p align="center">
+  <strong>Find better opportunities. Faster.</strong>
+</p>
 
-**Find the right opportunities without manually searching dozens of job boards.**
+<p align="center">
+  An AI-powered job and internship discovery platform that analyzes your resume, understands your preferences, and helps you discover relevant opportunities.
+</p>
 
+<p align="center">
+  <a href="https://sprightly-pudding-24dc69.netlify.app/">
+    <img src="https://img.shields.io/badge/🚀%20Live%20Demo-Visit%20AI%20Job%20Finder-00C7B7?style=for-the-badge" alt="Live Demo">
+  </a>
+  <a href="https://github.com/Rudra-113/ai-job-finder">
+    <img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github" alt="GitHub">
+  </a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/AI-Powered-8B5CF6?style=flat-square">
+  <img src="https://img.shields.io/badge/Status-Live-22C55E?style=flat-square">
+  <img src="https://img.shields.io/badge/Frontend-Netlify-00C7B7?style=flat-square&logo=netlify&logoColor=white">
+  <img src="https://img.shields.io/badge/Backend-Railway-0B0D0E?style=flat-square">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black">
 </p>
 
 ---
 
-## 🚀 Overview
+## 🌟 What is AI Job Finder?
 
-**AI Job Finder** is an open-source platform designed to simplify the job and internship discovery process.
+**AI Job Finder** is an AI-powered platform designed to make finding internships and jobs easier, faster, and more personalized.
 
-Instead of manually searching multiple job portals, comparing hundreds of listings, and checking whether each opportunity matches your profile, AI Job Finder analyzes your resume and preferences and helps you discover the most relevant opportunities.
+Instead of repeatedly searching job boards and manually checking whether every opportunity matches your profile, AI Job Finder analyzes your resume, understands your preferences, and helps you discover relevant opportunities.
 
-The system is designed around three principles:
+### The idea is simple:
 
-- **Personalized** — recommendations are based on your actual resume and preferences.
-- **Multi-source** — opportunities can be collected from multiple job platforms and company career pages.
-- **Transparent** — every recommendation shows why it matches your profile and provides a direct application link.
-
-> AI Job Finder is a job discovery and recommendation platform. Applications are completed by the user on the employer's official website.
+> **Upload your resume → Set your preferences → Discover opportunities → Apply**
 
 ---
 
-## ✨ Features
+## 🎯 Why AI Job Finder?
 
-### 🧠 AI Resume Analysis
+Finding the right internship or job can be time-consuming.
 
-Upload your resume and automatically extract relevant information such as:
+Students and job seekers often have to:
 
-- Education
-- Skills
-- Programming languages
-- Frameworks
-- Certifications
-- Projects
-- Experience
-- Internship experience
-- Preferred domains
+- Search across multiple platforms
+- Read hundreds of job descriptions
+- Compare requirements with their resume
+- Check locations and eligibility
+- Identify relevant roles
+- Repeat the same process every day
 
-The extracted profile can be reviewed and edited by the user.
-
----
-
-### 🎯 Personalized Job Matching
-
-AI compares your profile against job requirements and generates a relevance score.
-
-Example:
+AI Job Finder aims to reduce that friction by bringing the process into one simple workflow.
 
 ```text
-94% Match
+Traditional Job Search
 
-✓ Python
-✓ Networking
-✓ Linux
-✓ Cybersecurity
-✓ Relevant projects
+Search
+  ↓
+Open Job
+  ↓
+Read Description
+  ↓
+Compare Resume
+  ↓
+Reject / Apply
+  ↓
+Repeat
 
-Potential gap:
-△ SIEM experience preferred
-=======
-AI Job & Internship Finder searches public listings, ranks them against a resume, and gives each result a direct application link. **Apply** opens the employer’s page in a new tab. This application does not fill or submit applications.
+AI Job Finder
+Resume
+   ↓
+AI Analysis
+   ↓
+Your Profile
+   ↓
+Preferences
+   ↓
+Opportunity Matching
+   ↓
+Relevant Jobs & Internships
+   ↓
+Apply
 
-The browser site and the API are separate:
+✨ Features
+📄 Resume Analysis
+Upload your resume and let the system analyze your professional profile.
 
-- `frontend/` is the static site for Netlify
-- `backend/` is the Flask API for Render
+The platform can use information such as:
+- Skills
+- Education
+- Experience
+- Technical background
+- Other relevant resume information
+🤖 AI-Powered Understanding
+AI is used to understand the information contained in your resume and assist with finding opportunities that are relevant to your profile.
+🎯 Personalized Preferences
+Tell the platform what you're looking for.
 
-Launched from Trident Tech Labs.
+Depending on the available options, you can specify things such as:
+- Desired role
+- Job/internship preference
+- Location
+- Domain
+- Other opportunity preferences
+🔎 Opportunity Discovery
+Discover jobs and internships based on your profile and preferences instead of manually searching through countless listings.
+🧠 Profile-Based Matching
+The platform combines information from your resume with your preferences to help surface more relevant opportunities.
+💼 Opportunity Details
+Explore opportunity information before deciding whether it is relevant to you.
+🔗 Direct Application
+When you find an opportunity you want to pursue, you can continue to the original listing/application page.
 
-## What stayed the same
+AI Job Finder does not replace the employer's application process.
+👤 No Mandatory Login
+The current MVP is designed to allow users to start using the platform without requiring a traditional account.
+📱 Responsive Experience
+The interface is designed to work across desktop and mobile screen sizes.
+🧠 How It Works
+                 ┌──────────────────┐
+                 │   Upload Resume  │
+                 └────────┬─────────┘
+                          │
+                          ▼
+                 ┌──────────────────┐
+                 │   AI Analysis    │
+                 └────────┬─────────┘
+                          │
+                          ▼
+                 ┌──────────────────┐
+                 │ Set Preferences  │
+                 └────────┬─────────┘
+                          │
+                          ▼
+                 ┌──────────────────┐
+                 │ Search & Matching│
+                 └────────┬─────────┘
+                          │
+                          ▼
+                 ┌──────────────────┐
+                 │  Opportunities   │
+                 └────────┬─────────┘
+                          │
+                          ▼
+                 ┌──────────────────┐
+                 │   Apply Directly │
+                 └──────────────────┘
 
-- Resume upload, resume reading, and profile confirmation
-- Job search, source reporting, and match scoring
-- Closest matches when nothing clears every filter, each with a real apply URL
-- Job details and the direct application link
-- Unpaid roles, fee requests, the wrong sector, and the wrong workplace stay hidden
+🏗️ Architecture
+AI Job Finder uses a separated frontend/backend architecture.
+                         USER
+                           │
+                           ▼
+                 ┌─────────────────────┐
+                 │  Netlify Frontend   │
+                 │                     │
+                 │ HTML / CSS / JS     │
+                 └──────────┬──────────┘
+                            │
+                         HTTPS API
+                            │
+                            ▼
+                 ┌─────────────────────┐
+                 │  Railway Backend    │
+                 │                     │
+                 │ Python API          │
+                 │ Resume Processing   │
+                 │ AI Analysis         │
+                 │ Job Search          │
+                 │ Matching             │
+                 └──────────┬──────────┘
+                            │
+                            ▼
+                 ┌─────────────────────┐
+                 │ AI / Data Services  │
+                 └─────────────────────┘
 
-No account or Google sign-in is required. Each browser gets its own saved resume and searches.
+🛠️ Technology Stack
+Frontend
+- HTML5
+- CSS3
+- JavaScript
+- Responsive Web Design
+- Netlify
+Backend
+- Python
+- REST-style API architecture
+- Resume processing
+- AI analysis
+- Job discovery
+- Opportunity matching
+- Railway
+Development
+- Git
+- GitHub
+- Automated testing
+- Environment-based configuration
+📁 Project Structure
+ai-job-finder/
+│
+├── frontend/
+│   ├── assets/
+│   ├── js/
+│   ├── scripts/
+│   ├── index.html
+│   ├── dashboard.html
+│   ├── onboarding.html
+│   ├── opportunity.html
+│   ├── profile.html
+│   ├── settings.html
+│   ├── privacy.html
+│   ├── terms.html
+│   └── config.js
+│
+├── backend/
+│   ├── jobagent/
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   ├── Procfile
+│   └── runtime.txt
+│
+├── tests/
+│
+├── netlify.toml
+├── render.yaml
+├── README.md
+└── .gitignore
 
-Search does not invent employers, skills, pay, or URLs.
+The project structure may evolve as new features are added.
 
-## Layout
+🚀 Getting Started
+Prerequisites
+Make sure you have:
+- Python 3.12+
+- Git
+- A modern web browser
+- Node.js if required by the frontend tooling
+1. Clone the Repository
+git clone https://github.com/Rudra-113/ai-job-finder.git
+cd ai-job-finder
 
-```
-frontend/     HTML, CSS, JavaScript, and the Netlify build
-backend/      Flask app, jobagent package, and Python dependencies
-tests/        Local tests
-data/         Private profile and searches. Not committed.
-```
+2. Backend Setup
+Move into the backend directory:
+cd backend
 
-## Run it on this computer
+Create a virtual environment.
+Windows
+python -m venv .venv
+.venv\Scripts\activate
 
-Python 3.11 or newer.
-
-```bash
+macOS / Linux
 python3 -m venv .venv
-.venv/bin/python -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
-SERVE_FRONTEND=1 DATA_DIR="$PWD/data" PORT=47321 .venv/bin/python backend/app.py
+source .venv/bin/activate
+
+Install dependencies:
+pip install -r requirements.txt
+
+3. Environment Configuration
+Configure the required environment variables using the provided environment example files.
+
+Never commit:
+.env
+API keys
+Secret keys
+Private credentials
+Production tokens
+User resumes
+Personal user data
+
+4. Start the Backend
+From the backend/ directory:
+python app.py
+
+The backend will start using the application's configured host and port.
+5. Run the Frontend
+Serve the frontend/ directory using your preferred local static server.
+
+Make sure the frontend API configuration points to your local backend during development.
+🧪 Testing
+The project contains automated tests covering important application functionality.
+
+Run the test suite with:
+pytest
+
+Before submitting changes, make sure existing tests continue to pass.
+🔐 Security & Privacy
+AI Job Finder may process sensitive information contained in resumes.
+
+The project therefore follows important security principles:
+- API credentials remain on the backend
+- Secrets are not exposed in frontend code
+- CORS is configured for the application
+- Host validation is enabled
+- CSRF protection is used where applicable
+- Anonymous visitors can be identified without requiring traditional login
+- Uploaded files are processed through backend-controlled routes
+- Private backend information should not be exposed publicly
+⚠️ Never commit sensitive information
+.env
+API keys
+Secret keys
+Access tokens
+Private credentials
+User resumes
+Personal information
+Production configuration containing secrets
+
+🌍 Live Application
+🚀 Try AI Job Finder
+Live Website:
+
+https://sprightly-pudding-24dc69.netlify.app/
+
+Backend Health Endpoint:
+
+https://ai-job-finder-production-3898.up.railway.app/api/health
+🗺️ Roadmap
+✅ Phase 1 — MVP
+- [x] Resume upload
+- [x] Resume analysis
+- [x] Preference collection
+- [x] Opportunity discovery
+- [x] Job matching
+- [x] Job details
+- [x] Direct application links
+- [x] Anonymous user experience
+- [x] Production deployment
+- [x] Responsive interface
+🔄 Phase 2 — Analytics & Administration
+- [ ] Private admin dashboard
+- [ ] Visitor analytics
+- [ ] Resume upload analytics
+- [ ] AI analysis analytics
+- [ ] Search analytics
+- [ ] Job view analytics
+- [ ] Apply click analytics
+- [ ] API error monitoring
+- [ ] Resume/profile management
+- [ ] Activity monitoring
+🚀 Phase 3 — Personalization
+- [ ] Improved recommendation engine
+- [ ] Better resume-to-job matching
+- [ ] Personalized opportunity ranking
+- [ ] Saved opportunities
+- [ ] Application tracking
+- [ ] User preference history
+- [ ] Personalized job alerts
+💎 Phase 4 — Advanced Features
+Potential future features:
+- AI career recommendations
+- Resume improvement suggestions
+- Skill-gap analysis
+- Career roadmaps
+- Personalized job alerts
+- Advanced matching
+- Application tracking
+- Career analytics
+- Premium features
+🔮 Future Vision
+The long-term goal is to evolve AI Job Finder from a simple job discovery tool into an AI-powered career discovery platform.
+                    YOUR RESUME
+                         │
+                         ▼
+                ┌─────────────────┐
+                │  AI CAREER      │
+                │    ENGINE       │
+                └────────┬────────┘
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+        JOBS       INTERNSHIPS        SKILLS
+          │              │              │
+          └──────────────┼──────────────┘
+                         ▼
+                PERSONALIZED
+                OPPORTUNITIES
+                         │
+                         ▼
+                   APPLY / TRACK
+
+The vision is to help students and professionals spend less time searching and more time building their careers.
+🤝 Contributing
+Contributions, suggestions, ideas, and improvements are welcome.
+Create a feature branch
+git checkout -b feature/your-feature
+
+Before submitting changes
+Please ensure:
+- Existing functionality still works
+- Tests pass
+- No secrets are committed
+- Changes are documented
+- Unnecessary dependencies are avoided
+- Security considerations are addressed
+🐛 Issues & Feature Requests
+Found a bug or have an idea?
+
+Open an issue in the GitHub repository:
+
+https://github.com/Rudra-113/ai-job-finder/issues
+
+When reporting an issue, include:
+- What happened
+- What you expected
+- Steps to reproduce
+- Browser/environment information
+- Relevant error messages
+Please do not include private resumes, API keys, passwords, or other sensitive information.
+👨‍💻 Author
+Rudrapratap Mishra
+Computer Science & Engineering Student
+Lucknow, India
+Interests
+- Artificial Intelligence
+- Full-Stack Development
+- Software Engineering
+- Developer Tools
+- AI Applications
+- Building practical products
+📌 Project Status
+🟢 Live — Active Development
+
+AI Job Finder is currently available as a working MVP and is continuously being improved.
+<p align="center">
+
+🚀 Find opportunities. Build your future.
+AI Job Finder
+Built with ❤️ and AI
+</p>
 ```
-
-Open http://127.0.0.1:47321. `SERVE_FRONTEND=1` makes the API serve `frontend/` on the same origin, so cookies work over plain HTTP. On Windows, double-click `run.bat`.
-
-Copy `.env.example` to `.env` when you want those values loaded at startup. A variable already set in the environment is left as it is.
-
-The existing profile lives in `data/` at the repository root. Set `DATA_DIR` to that folder. If `DATA_DIR` is unset, the API uses `backend/data`.
-
-## Frontend environment
-
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `API_URL` | Netlify | Public Render URL, no trailing slash. Example: `https://ai-job-finder-api.onrender.com` |
-| `VITE_API_URL` | Netlify | Accepted instead of `API_URL` |
-
-The Netlify build writes `frontend/config.js`. An empty value means same-origin, which is only for a local API that also serves the pages. A production Netlify build stops if the URL is missing.
-
-## Backend environment
-
-| Variable | Required in production | Purpose |
-| --- | --- | --- |
-| `PORT` | Set by Render | Port the API listens on. Local default is `47321`. |
-| `BIND_HOST` | No | Defaults to `0.0.0.0`. |
-| `APP_ENV` | Yes | `production` turns debug off and uses a Secure, SameSite=None session cookie. |
-| `DATA_DIR` | Yes | Persistent directory. Render disk mount: `/var/data`. |
-| `FRONTEND_ORIGIN` | Yes | Comma-separated Netlify origins, for example `https://your-site.netlify.app`. CORS allows only these origins. There is no `*` default. |
-| `SECRET_KEY` | Yes | Session signing key. Render can generate it. If unset locally, a key is stored in `DATA_DIR/secret.key`. |
-| `ALLOWED_HOSTS` | When using a custom domain | Comma-separated hostnames. `127.0.0.1` and `localhost` are the local default. On Render, `RENDER_EXTERNAL_HOSTNAME` and `*.onrender.com` are allowed as well. |
-| `SESSION_COOKIE_SAMESITE` | No | Override. Production default is `None`. |
-| `SESSION_COOKIE_SECURE` | No | Override. Production default is on. |
-| `FLASK_DEBUG` | No | Local only. Forced off when `APP_ENV=production` or `RENDER=true`. |
-| `SERVE_FRONTEND` | No | `1` serves `frontend/` from Flask. Leave unset on Render. |
-| `OPENAI_API_KEY` | No | Optional answers. Search runs without it. |
-| `OPENAI_BASE_URL` | No | Default `https://api.openai.com/v1`. |
-| `OPENAI_MODEL` | No | Default `gpt-4o-mini`. |
-
-`GET /api/health` returns `{"status":"ok"}`.
-
-## Netlify
-
-- Base directory: `frontend` (also set in the root `netlify.toml`)
-- Build command: `node scripts/write-config.js`
-- Publish directory: `.` relative to `frontend` (the repository root publishes `frontend/`)
-- Node 20
-- Environment variable: `API_URL` = the Render service URL
-
-The site is a set of HTML pages. No SPA redirect is required.
-
-## Render
-
-`render.yaml` describes one Python web service:
-
-- Root directory: `backend`
-- Build command: `pip install -r requirements.txt`
-- Start command: `python app.py`
-- Health check: `/api/health`
-- Disk: `jobfinder-data` mounted at `/var/data`
-- `DATA_DIR=/var/data`
-- `APP_ENV=production`
-- Set `FRONTEND_ORIGIN` to the exact Netlify origin after the first frontend deploy
-
-The API listens on `0.0.0.0` and `$PORT`. Debug is off when Render sets `RENDER=true`.
-
-Attach the disk before relying on saved profiles. Without it, Render’s filesystem is replaced on each deploy and uploaded resumes disappear.
-
-### Playwright
-
-The running API does not import Playwright and does not launch a browser. Production `backend/requirements.txt` does not include it, so the Render build does not need `playwright install`.
-
-`backend/jobagent/apply.py` can still fill a local sample form in tests. That path is not wired to search or to the Apply button. To run it on a development machine:
-
-```bash
-.venv/bin/python -m pip install -r backend/requirements-dev.txt
-.venv/bin/python -m playwright install chromium
-```
-
-Do not add that install step to the Render build.
-
-## Uploads and logs
-
-Resumes must be PDF, DOCX, TXT, or MD, 5 MB or smaller, and the bytes must match that type. The API refuses a body over 8 MB. Profile responses omit the resume text and the file path. Logs record short status lines. Email addresses in errors are redacted, and resume text is not written to the log.
-
-## Tests
-
-```bash
-.venv/bin/python -m pytest
-```
-
-The tests use local samples. They do not submit applications to employers.
-
-## Temporary public link
-
-`start_tunnel.py` is a password gate in front of the local API. It is not the Netlify or Render deployment. Start the API first, then:
-
-```bash
-.venv/bin/python start_tunnel.py
-```
->>>>>>> 0634dd5 (separate frontend and backend for deployment)
-
-Close it with `stop_tunnel.py`. The local page does not ask for the tunnel password.
