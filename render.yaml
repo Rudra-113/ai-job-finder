@@ -10,7 +10,7 @@ services:
       - key: APP_ENV
         value: production
       - key: PYTHON_VERSION
-        value: 3.12.7
+        value: 3.12.15
       - key: DATA_DIR
         value: /var/data
       - key: FRONTEND_ORIGIN
