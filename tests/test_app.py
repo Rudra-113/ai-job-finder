@@ -200,6 +200,45 @@ def test_anonymous_visitors_keep_separate_resumes(tmp_path):
     assert gone.status_code == 404
 
 
+def test_resume_upload_without_the_session_cookie(tmp_path):
+    application = create_app(tmp_path)
+    browser = application.test_client()
+    info = browser.get("/api/session").get_json()
+    visitor = info["visitor_id"]
+    assert visitor.startswith("anon_")
+    # Netlify calls Railway on another site, so the session cookie is not sent back.
+    remote = application.test_client()
+    missing = remote.post(
+        "/api/onboarding/resume",
+        data={"cv": (io.BytesIO(b"%PDF-1.4 resume"), "resume.pdf")},
+        content_type="multipart/form-data",
+        headers={"X-CSRF-Token": info["csrf"]},
+    )
+    assert missing.status_code == 400
+    assert missing.get_json()["error"] == "Reload the page and submit the form again."
+    uploaded = remote.post(
+        "/api/onboarding/resume",
+        data={"cv": (io.BytesIO(b"Ada Lovelace\nPython\n"), "notes.txt")},
+        content_type="multipart/form-data",
+        headers={"X-Visitor-Id": visitor, "X-CSRF-Token": info["csrf"]},
+    )
+    assert uploaded.status_code == 200
+    assert uploaded.get_json()["profile"]["has_resume"] is True
+    saved = remote.get(
+        "/api/profile",
+        headers={"X-Visitor-Id": visitor, "X-CSRF-Token": info["csrf"]},
+    ).get_json()
+    assert saved["cv_name"] == "resume.txt"
+    assert (tmp_path / "users" / visitor / "cv" / "resume.txt").is_file()
+    forged = remote.post(
+        "/api/onboarding/resume",
+        data={"cv": (io.BytesIO(b"Other Person\n"), "notes.txt")},
+        content_type="multipart/form-data",
+        headers={"X-Visitor-Id": visitor, "X-CSRF-Token": "0" * 64},
+    )
+    assert forged.status_code == 400
+
+
 def test_cors_allows_only_the_configured_frontend(tmp_path, monkeypatch):
     monkeypatch.setenv("FRONTEND_ORIGIN", "https://finder.example, https://preview.example")
     _app, client = _client(tmp_path)
@@ -215,6 +254,7 @@ def test_cors_allows_only_the_configured_frontend(tmp_path, monkeypatch):
     )
     assert preflight.status_code == 204
     assert preflight.headers["Access-Control-Allow-Origin"] == "https://preview.example"
+    assert "X-Visitor-Id" in preflight.headers["Access-Control-Allow-Headers"]
 
 
 def test_resume_upload_rejects_the_wrong_file(tmp_path):

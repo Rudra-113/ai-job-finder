@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import re
@@ -71,6 +73,9 @@ def create_app(home: Path | None = None) -> Flask:
     app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "None" if production else "Lax")
     secure = os.environ.get("SESSION_COOKIE_SECURE", "1" if production else "0")
     app.config["SESSION_COOKIE_SECURE"] = secure.strip().lower() in {"1", "true", "yes"}
+    # The site and the API are on different hosts. A partitioned cookie can be stored
+    # for that pair; the visitor header below still works when the cookie is blocked.
+    app.config["SESSION_COOKIE_PARTITIONED"] = production
     app.extensions["home"] = home
     app.extensions["agent"] = AgentService(home)
     app.extensions["serve_frontend"] = os.environ.get("SERVE_FRONTEND", "").strip() in {"1", "true", "yes"}
@@ -78,10 +83,46 @@ def create_app(home: Path | None = None) -> Flask:
     def root_home() -> Path:
         return app.extensions["home"]
 
+    def _visitor_token(user_id: str) -> str:
+        key = app.config["SECRET_KEY"]
+        secret = key.encode() if isinstance(key, str) else bytes(key)
+        return hmac.new(secret, user_id.encode(), hashlib.sha256).hexdigest()
+
+    def _valid_visitor(user_id: str) -> bool:
+        return bool(re.fullmatch(r"anon_[0-9a-f]{32}", user_id or ""))
+
+    def _same_token(left: str, right: str) -> bool:
+        if not left or not right:
+            return False
+        return hmac.compare_digest(left, right)
+
+    def _adopt_visitor() -> None:
+        if session.get("user_id"):
+            return
+        visitor = (request.headers.get("X-Visitor-Id") or "").strip()
+        token = (request.headers.get("X-CSRF-Token") or "").strip()
+        if _valid_visitor(visitor) and _same_token(token, _visitor_token(visitor)):
+            session["user_id"] = visitor
+            session["csrf"] = token
+
+    def _posted_csrf() -> str:
+        token = (request.headers.get("X-CSRF-Token") or "").strip()
+        if token:
+            return token
+        if request.is_json:
+            body = request.get_json(silent=True) or {}
+            if isinstance(body, dict):
+                return str(body.get("csrf") or "")
+        return str(request.form.get("csrf") or "")
+
     def ensure_visitor() -> None:
         if session.get("user_id") or request.path == "/api/health":
             return
+        _adopt_visitor()
+        if session.get("user_id"):
+            return
         session["user_id"] = "anon_" + secrets.token_hex(16)
+        session["csrf"] = _visitor_token(session["user_id"])
 
     def current_home() -> Path:
         ensure_visitor()
@@ -128,7 +169,7 @@ def create_app(home: Path | None = None) -> Flask:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Vary"] = "Origin"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-CSRF-Token, Accept"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-CSRF-Token, X-Visitor-Id, Accept"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         return response
 
@@ -138,17 +179,18 @@ def create_app(home: Path | None = None) -> Flask:
             return jsonify({"ok": False, "error": "This host is not allowed."}), 403
         if request.method == "OPTIONS":
             return ("", 204)
+        _adopt_visitor()
+        if not session.get("user_id") and request.path != "/api/health" and request.method != "POST":
+            session["user_id"] = "anon_" + secrets.token_hex(16)
+            session["csrf"] = _visitor_token(session["user_id"])
         if "csrf" not in session:
             session["csrf"] = secrets.token_hex(16)
         if request.method == "POST":
-            token = request.form.get("csrf") or request.headers.get("X-CSRF-Token") or ""
-            if request.is_json:
-                body = request.get_json(silent=True) or {}
-                if isinstance(body, dict) and not token:
-                    token = str(body.get("csrf") or "")
-            if not token or token != session.get("csrf"):
+            # A cross-site call may not send the cookie. The signed visitor header is the session.
+            if not session.get("user_id"):
                 return jsonify({"ok": False, "error": "Reload the page and submit the form again."}), 400
-        ensure_visitor()
+            if not _same_token(_posted_csrf(), session.get("csrf") or ""):
+                return jsonify({"ok": False, "error": "Reload the page and submit the form again."}), 400
         return None
 
     def _public_profile(profile) -> dict:
@@ -178,6 +220,7 @@ def create_app(home: Path | None = None) -> Flask:
         return jsonify(
             {
                 "logged_in": bool(session.get("user_id")),
+                "visitor_id": session.get("user_id") or "",
                 "user_name": session.get("user_name") or "",
                 "user_email": session.get("user_email") or "",
                 "csrf": session.get("csrf") or "",

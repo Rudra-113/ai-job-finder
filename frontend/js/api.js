@@ -6,6 +6,38 @@ function apiBase() {
 }
 
 let csrfToken = "";
+let visitorId = "";
+
+function stored(key) {
+  try {
+    return sessionStorage.getItem(key) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function store(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch (error) {
+    return;
+  }
+}
+
+csrfToken = stored("jobfinder_csrf");
+visitorId = stored("jobfinder_visitor");
+
+function rememberSession(data) {
+  if (!data) return;
+  if (data.csrf) {
+    csrfToken = data.csrf;
+    store("jobfinder_csrf", csrfToken);
+  }
+  if (data.visitor_id && String(data.visitor_id).indexOf("anon_") === 0) {
+    visitorId = data.visitor_id;
+    store("jobfinder_visitor", visitorId);
+  }
+}
 
 function showBanner(message, kind) {
   const node = document.getElementById("banner");
@@ -24,7 +56,8 @@ async function api(path, options = {}) {
     body = JSON.stringify(body);
   }
   const method = options.method || "GET";
-  if (csrfToken && method !== "GET" && method !== "HEAD") headers.set("X-CSRF-Token", csrfToken);
+  if (visitorId) headers.set("X-Visitor-Id", visitorId);
+  if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
   let response;
   try {
     response = await fetch(apiBase() + path, { method, body, headers, credentials: "include" });
@@ -34,7 +67,7 @@ async function api(path, options = {}) {
     throw failure;
   }
   const data = await response.json().catch(() => ({}));
-  if (data && data.csrf) csrfToken = data.csrf;
+  rememberSession(data);
   if (!response.ok || data.ok === false) {
     const failure = new Error(data.error || "The request could not be completed.");
     failure.status = response.status;
@@ -47,6 +80,6 @@ async function api(path, options = {}) {
 
 async function loadSession() {
   const data = await api("/api/session", { quiet: true });
-  csrfToken = data.csrf || csrfToken;
+  rememberSession(data);
   return data;
 }
